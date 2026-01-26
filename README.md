@@ -223,9 +223,3 @@ Primero que funcione bien en el negocio, luego se optimiza.
 
 ---
 
-## 🧠 Autor y liderazgo técnico
-
-Proyecto liderado por:
-
-Diego Sánchez  
-Arquitectura, integración y despliegue del sistema.
