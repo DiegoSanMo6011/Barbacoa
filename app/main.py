@@ -3,6 +3,9 @@ from tkinter import ttk, messagebox
 
 from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
+from ui.gastos_dialog import GastosDialog
+from ui.propinas_dialog import PropinasDialog
+from ui.cierre_dialog import CierreDialog
 
 
 class POSApp(tk.Tk):
@@ -36,6 +39,12 @@ class POSApp(tk.Tk):
         top.pack(fill="x")
 
         ttk.Label(top, text="BARBACOA POS", font=("Arial", 18, "bold")).pack(side="left")
+
+        btns = ttk.Frame(top)
+        btns.pack(side="left", padx=10)
+        ttk.Button(btns, text="Gastos", command=self._open_gastos).pack(side="left", padx=4)
+        ttk.Button(btns, text="Propinas", command=self._open_propinas).pack(side="left", padx=4)
+        ttk.Button(btns, text="Cierre", command=self._open_cierre).pack(side="left", padx=4)
 
         ttk.Label(top, text="Mesero:").pack(side="right")
         self.mesero_var = tk.StringVar()
@@ -120,6 +129,10 @@ class POSApp(tk.Tk):
         metodo = ttk.Combobox(pay2, textvariable=self.metodo_var, values=["EFECTIVO", "TARJETA", "TRANSFER"], state="readonly", width=12)
         metodo.pack(side="left", padx=6)
         metodo.bind("<<ComboboxSelected>>", lambda _e: self._toggle_cash_fields())
+
+        ttk.Label(pay2, text="Propina:").pack(side="left", padx=(12, 0))
+        self.propina_var = tk.StringVar()
+        ttk.Entry(pay2, textvariable=self.propina_var, width=10).pack(side="left", padx=6)
 
         self.cash_frame = ttk.Frame(right)
         self.cash_frame.pack(fill="x", pady=(6, 0))
@@ -209,6 +222,8 @@ class POSApp(tk.Tk):
     def _clear_all(self):
         self.items = []
         self._refresh_ticket()
+        if hasattr(self, "propina_var"):
+            self.propina_var.set("")
 
     def _toggle_cash_fields(self):
         if self.metodo_var.get() == "EFECTIVO":
@@ -242,6 +257,17 @@ class POSApp(tk.Tk):
         metodo = self.metodo_var.get()
         total = calcular_total(self.items)
 
+        propina_txt = (self.propina_var.get().strip() if hasattr(self, "propina_var") else "")
+        propina = 0.0
+        if propina_txt:
+            try:
+                propina = float(propina_txt)
+                if propina < 0:
+                    raise ValueError
+            except Exception:
+                messagebox.showwarning("Propina inválida", "La propina debe ser un número >= 0.")
+                return
+
         recibido = None
         cambio = None
 
@@ -259,6 +285,15 @@ class POSApp(tk.Tk):
         try:
             comanda = self.db.crear_comanda(mesero, metodo, total, recibido, cambio)
             self.db.agregar_items(comanda["id"], self.items)
+            if propina > 0:
+                snapshot = mesero if mesero.strip() else "(SIN MESERO)"
+                self.db.crear_propina(
+                    monto=propina,
+                    mesero_id=None,
+                    mesero_nombre_snapshot=snapshot,
+                    fuente="COMANDA",
+                    comanda_id=comanda["id"],
+                )
             messagebox.showinfo("OK", f"Comanda guardada ✅\nTotal: ${total:.2f}\nMétodo: {metodo}")
             self._clear_all()
             self.mesero_var.set("")
@@ -267,8 +302,17 @@ class POSApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo guardar en Supabase:\n{e}")
 
+    # ---------------- Dialogs ----------------
+    def _open_gastos(self):
+        GastosDialog(self, self.db)
+
+    def _open_propinas(self):
+        PropinasDialog(self, self.db)
+
+    def _open_cierre(self):
+        CierreDialog(self, self.db)
+
 
 if __name__ == "__main__":
     app = POSApp()
     app.mainloop()
-

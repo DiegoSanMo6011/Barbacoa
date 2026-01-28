@@ -1,3 +1,4 @@
+from datetime import date, datetime, time, timezone
 from supabase import create_client
 from .settings import SUPABASE_URL, SUPABASE_KEY
 
@@ -35,3 +36,171 @@ class SupabaseService:
                 "subtotal": round(float(it["subtotal"]), 2),
             })
         self.client.table("comanda_items").insert(payload).execute()
+
+    # ---------------- Gastos ----------------
+    def crear_gasto(self, concepto: str, categoria: str, monto: float, nota: str | None = None) -> dict:
+        if not concepto or not concepto.strip():
+            raise ValueError("concepto es obligatorio")
+        if not categoria or not categoria.strip():
+            raise ValueError("categoria es obligatoria")
+        if monto is None or float(monto) <= 0:
+            raise ValueError("monto debe ser > 0")
+
+        data = {
+            "concepto": concepto.strip(),
+            "categoria": categoria.strip(),
+            "monto": round(float(monto), 2),
+            "nota": nota.strip() if isinstance(nota, str) and nota.strip() else None,
+        }
+        res = self.client.table("gastos").insert(data).execute()
+        return res.data[0]
+
+    def listar_gastos_dia(self, fecha: date) -> list[dict]:
+        # Criterio: rango completo del día en UTC (00:00:00 -> 23:59:59.999999)
+        desde, hasta = self._day_range(fecha)
+        res = (
+            self.client.table("gastos")
+            .select("*")
+            .gte("created_at", desde)
+            .lte("created_at", hasta)
+            .order("created_at")
+            .execute()
+        )
+        return res.data or []
+
+    # ---------------- Propinas ----------------
+    def crear_propina(
+        self,
+        monto: float,
+        mesero_id: str | None = None,
+        mesero_nombre_snapshot: str | None = None,
+        fuente: str = "MANUAL",
+        comanda_id: str | None = None,
+    ) -> dict:
+        if monto is None or float(monto) < 0:
+            raise ValueError("monto debe ser >= 0")
+        if mesero_nombre_snapshot is not None and not mesero_nombre_snapshot.strip():
+            mesero_nombre_snapshot = None
+        if fuente is None or not str(fuente).strip():
+            fuente = "MANUAL"
+
+        data = {
+            "monto": round(float(monto), 2),
+            "mesero_id": mesero_id,
+            "mesero_nombre_snapshot": mesero_nombre_snapshot.strip() if mesero_nombre_snapshot else None,
+            "fuente": fuente.strip(),
+            "comanda_id": comanda_id,
+        }
+        res = self.client.table("propinas").insert(data).execute()
+        return res.data[0]
+
+    def listar_propinas_rango(self, desde: datetime, hasta: datetime) -> list[dict]:
+        if not isinstance(desde, datetime) or not isinstance(hasta, datetime):
+            raise ValueError("desde y hasta deben ser datetime")
+        if hasta < desde:
+            raise ValueError("hasta debe ser >= desde")
+
+        res = (
+            self.client.table("propinas")
+            .select("*")
+            .gte("fecha", desde.isoformat())
+            .lte("fecha", hasta.isoformat())
+            .order("fecha")
+            .execute()
+        )
+        return res.data or []
+
+    def reporte_propinas_mes(self, year: int, month: int) -> list[dict]:
+        if month < 1 or month > 12:
+            raise ValueError("month debe estar entre 1 y 12")
+
+        desde = datetime(year, month, 1, tzinfo=timezone.utc)
+        if month == 12:
+            hasta = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            hasta = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+
+        # Usamos rango [desde, hasta) con ajuste al criterio de lte
+        hasta = hasta.replace(microsecond=0) - datetime.resolution
+
+        rows = self.listar_propinas_rango(desde, hasta)
+        agg: dict[str, dict] = {}
+
+        for r in rows:
+            mesero_id = r.get("mesero_id")
+            mesero_name = r.get("mesero_nombre_snapshot") or None
+            key = mesero_id or mesero_name or "SIN_NOMBRE"
+            label = mesero_name or mesero_id or "Sin nombre"
+
+            if key not in agg:
+                agg[key] = {"mesero": label, "total_propinas": 0.0, "num_propinas": 0}
+
+            agg[key]["total_propinas"] += float(r.get("monto") or 0)
+            agg[key]["num_propinas"] += 1
+
+        result = list(agg.values())
+        result.sort(key=lambda x: (-x["total_propinas"], x["mesero"]))
+        return result
+
+    # ---------------- Cierre de caja ----------------
+    def obtener_cierre(self, fecha: date) -> dict | None:
+        res = self.client.table("cierres_caja").select("*").eq("fecha", fecha.isoformat()).execute()
+        if not res.data:
+            return None
+        return res.data[0]
+
+    def crear_cierre(self, fecha: date, efectivo_reportado: float, notas: str | None = None) -> dict:
+        if efectivo_reportado is None or float(efectivo_reportado) < 0:
+            raise ValueError("efectivo_reportado debe ser >= 0")
+
+        existente = self.obtener_cierre(fecha)
+        if existente:
+            raise ValueError(f"Ya existe un cierre para la fecha {fecha.isoformat()}")
+
+        desde, hasta = self._day_range(fecha)
+
+        ventas_rows = (
+            self.client.table("comandas")
+            .select("total, metodo_pago")
+            .gte("created_at", desde)
+            .lte("created_at", hasta)
+            .execute()
+        ).data or []
+
+        total_ventas = sum(float(r.get("total") or 0) for r in ventas_rows)
+        ventas_efectivo = sum(
+            float(r.get("total") or 0)
+            for r in ventas_rows
+            if r.get("metodo_pago") == "EFECTIVO"
+        )
+
+        gastos_rows = (
+            self.client.table("gastos")
+            .select("monto")
+            .gte("created_at", desde)
+            .lte("created_at", hasta)
+            .execute()
+        ).data or []
+
+        total_gastos = sum(float(r.get("monto") or 0) for r in gastos_rows)
+        neto = total_ventas - total_gastos
+        diferencia_efectivo = float(efectivo_reportado) - ventas_efectivo
+
+        data = {
+            "fecha": fecha.isoformat(),
+            "total_ventas": round(float(total_ventas), 2),
+            "total_gastos": round(float(total_gastos), 2),
+            "neto": round(float(neto), 2),
+            "efectivo_reportado": round(float(efectivo_reportado), 2),
+            "diferencia_efectivo": round(float(diferencia_efectivo), 2),
+            "notas": notas.strip() if isinstance(notas, str) and notas.strip() else None,
+        }
+        res = self.client.table("cierres_caja").insert(data).execute()
+        return res.data[0]
+
+    # ---------------- Helpers ----------------
+    def _day_range(self, fecha: date) -> tuple[str, str]:
+        # Rango en UTC para created_at: 00:00:00 -> 23:59:59.999999
+        start = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
+        end = datetime.combine(fecha, time.max, tzinfo=timezone.utc)
+        return start.isoformat(), end.isoformat()
