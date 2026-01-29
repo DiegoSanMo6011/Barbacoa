@@ -151,6 +151,8 @@ python app/main.py
 - Reportes
 - Instalación en Raspberry Pi
 
+Nota: el módulo de Reportes exporta CSV en la carpeta `exports/` (se crea automáticamente al exportar).
+
 ---
 
 ## 👥 Organización del equipo
@@ -222,4 +224,3 @@ La prioridad del proyecto es:
 Primero que funcione bien en el negocio, luego se optimiza.
 
 ---
-
