@@ -145,3 +145,32 @@ def get_ventas_por_metodo(
     for k in ("EFECTIVO", "TARJETA", "TRANSFER", "total"):
         resumen[k] = round(float(resumen[k]), 2)
     return resumen
+
+
+def get_ventas_por_mesero(
+    fecha_inicio: date,
+    fecha_fin: date,
+    limit: int = 8,
+    db: SupabaseService | None = None,
+) -> list[dict]:
+    db = _get_db(db)
+    desde, hasta = _range_iso(db, fecha_inicio, fecha_fin)
+
+    rows = (
+        db.client.table("comandas")
+        .select("mesero, total")
+        .gte("created_at", desde)
+        .lte("created_at", hasta)
+        .execute()
+    ).data or []
+
+    agg: dict[str, float] = {}
+    for r in rows:
+        mesero = (r.get("mesero") or "SIN MESERO").strip() or "SIN MESERO"
+        agg[mesero] = agg.get(mesero, 0.0) + float(r.get("total") or 0)
+
+    result = [{"mesero": k, "total": round(v, 2)} for k, v in agg.items()]
+    result.sort(key=lambda x: (-x["total"], x["mesero"]))
+    if limit is not None and limit > 0:
+        result = result[:limit]
+    return result

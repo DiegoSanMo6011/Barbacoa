@@ -11,8 +11,10 @@ from services.reportes_service import (
     get_top_productos,
     get_ventas_por_dia,
     get_ventas_por_metodo,
+    get_ventas_por_mesero,
 )
 from services.supabase_service import SupabaseService
+from ui.reportes_graficas import ReportesGraficas
 
 
 class ReportesView(ctk.CTkToplevel):
@@ -27,6 +29,7 @@ class ReportesView(ctk.CTkToplevel):
         self._top_productos = []
         self._ventas_por_dia = []
         self._ventas_por_metodo = {}
+        self._ventas_por_mesero = []
 
         hoy = date.today()
         self.fecha_fin_var = tk.StringVar(value=hoy.isoformat())
@@ -45,6 +48,9 @@ class ReportesView(ctk.CTkToplevel):
         header = ctk.CTkFrame(self)
         header.pack(fill="x", padx=12, pady=12)
 
+        self.logo_img = self._load_logo()
+        if self.logo_img:
+            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(6, 8))
         ctk.CTkLabel(header, text="Reportes", font=("Arial", 16, "bold")).pack(side="left", padx=6)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
@@ -54,6 +60,8 @@ class ReportesView(ctk.CTkToplevel):
         ctk.CTkLabel(date_row, text="Fin:").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_fin_var, width=120).pack(side="left", padx=6)
         ctk.CTkButton(date_row, text="Cargar", command=self._load_reportes).pack(side="left", padx=6)
+        ctk.CTkButton(date_row, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
+        ctk.CTkButton(date_row, text="Gráficas", command=self._open_graficas).pack(side="left", padx=6)
 
         resumen = ctk.CTkFrame(self)
         resumen.pack(fill="x", padx=12, pady=(0, 12))
@@ -132,6 +140,7 @@ class ReportesView(ctk.CTkToplevel):
             self._top_productos = get_top_productos(inicio, fin, limit=10, db=self.db)
             self._ventas_por_dia = get_ventas_por_dia(inicio, fin, db=self.db)
             self._ventas_por_metodo = get_ventas_por_metodo(inicio, fin, db=self.db)
+            self._ventas_por_mesero = get_ventas_por_mesero(inicio, fin, limit=8, db=self.db)
         except Exception as e:
             self.status_var.set("")
             messagebox.showerror("Error", f"No se pudieron cargar los reportes:\n{e}")
@@ -199,3 +208,36 @@ class ReportesView(ctk.CTkToplevel):
             messagebox.showinfo("OK", f"CSV exportado en {filename}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo exportar CSV:\n{e}")
+
+    def _open_graficas(self):
+        inicio = self._parse_fecha(self.fecha_inicio_var.get())
+        fin = self._parse_fecha(self.fecha_fin_var.get())
+        if not inicio or not fin:
+            messagebox.showwarning("Fechas inválidas", "Usa el formato YYYY-MM-DD.")
+            return
+        ReportesGraficas(
+            self,
+            inicio,
+            fin,
+            self._ventas_por_metodo,
+            self._ventas_por_dia,
+            self._ventas_por_mesero,
+        )
+
+    def _load_logo(self) -> tk.PhotoImage | None:
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
+        candidates = ("logo_barbacoa.png", "file.png", "logo.png")
+        for name in candidates:
+            path = os.path.join(base, name)
+            if not os.path.exists(path):
+                continue
+            try:
+                img = tk.PhotoImage(file=path)
+                max_px = 32
+                if img.width() > max_px:
+                    factor = max(1, img.width() // max_px)
+                    img = img.subsample(factor, factor)
+                return img
+            except Exception:
+                return None
+        return None
