@@ -13,12 +13,12 @@ class GastosDialog(ctk.CTkToplevel):
         self.title("Control de Gastos")
         self.geometry("800x600")
         self.resizable(False, False)
-        # Hace que la ventana sea modal (bloquea la de atrás hasta cerrar esta)
+        # bloquea ventana de atras hasta cerrar la de enfrente
         self.grab_set()
 
         self.db = supabase
 
-        # --- CONFIGURACIÓN DE CATEGORÍAS (Editable aquí) ---
+        # --- CONFIGURACIÓN DE CATEGORÍAS ---
         self.lista_categorias = ["INSUMOS", "GAS", "NOMINA", "MANTENIMIENTO", "GENERAL", "OTRO"]
 
         # Variables
@@ -33,13 +33,13 @@ class GastosDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         # 1. Título Superior
-        ctk.CTkLabel(self, text="🚀 REGISTRAR NUEVO GASTO", font=("Arial", 20, "bold")).pack(pady=(15, 5))
+        ctk.CTkLabel(self, text=" REGISTRAR NUEVO GASTO", font=("Arial", 20, "bold")).pack(pady=(15, 5))
 
         # 2. Frame del Formulario
         form_frame = ctk.CTkFrame(self)
         form_frame.pack(fill="x", padx=20, pady=10)
 
-        # --- FILA 1: Monto y Categoría ---
+        # --- FILA 1---
         # Label y Entry para Monto
         ctk.CTkLabel(form_frame, text="Monto ($)", font=("Arial", 12)).grid(row=0, column=0, padx=10, pady=(10,0), sticky="w")
         ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 150.50", width=120).grid(row=1, column=0, padx=10, pady=(0,10), sticky="w")
@@ -48,16 +48,16 @@ class GastosDialog(ctk.CTkToplevel):
         ctk.CTkLabel(form_frame, text="Categoría", font=("Arial", 12)).grid(row=0, column=1, padx=10, pady=(10,0), sticky="w")
         ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=150).grid(row=1, column=1, padx=10, pady=(0,10), sticky="w")
 
-        # --- FILA 2: Concepto y Nota ---
+        # --- FILA 2 ---
         # Label y Entry para Concepto
         ctk.CTkLabel(form_frame, text="Concepto (¿Qué compraste?)", font=("Arial", 12)).grid(row=2, column=0, columnspan=2, padx=10, pady=(5,0), sticky="w")
         ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="Ej: Compra de verdura", width=300).grid(row=3, column=0, columnspan=2, padx=10, pady=(0,10), sticky="w")
         
-        # Label y Entry para Nota (Opcional)
+        # Label y Entry para Nota 
         ctk.CTkLabel(form_frame, text="Nota Extra (Opcional)", font=("Arial", 12)).grid(row=2, column=2, padx=10, pady=(5,0), sticky="w")
         ctk.CTkEntry(form_frame, textvariable=self.nota_var, placeholder_text="Detalles...", width=200).grid(row=3, column=2, padx=10, pady=(0,10), sticky="w")
 
-        # Botón de Guardar (Estilo Gamer Green)
+        # Botón de Guardar 
         btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO 💾", fg_color="#27ae60", hover_color="#2ecc71", width=180, command=self._guardar)
         btn_save.grid(row=1, column=2, rowspan=2, padx=20, pady=10)
 
@@ -136,7 +136,7 @@ class GastosDialog(ctk.CTkToplevel):
         for row in self.tree.get_children():
             self.tree.delete(row)
 
-        # Cargar datos de Supabase (usando la función que ya existe en tu service)
+        # Cargar datos de Supabase 
         try:
             gastos = self.db.listar_gastos_dia(date.today())
             total = 0.0
