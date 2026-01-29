@@ -37,12 +37,14 @@ class SupabaseService:
             })
         self.client.table("comanda_items").insert(payload).execute()
 
-    # ---------------- Gastos ----------------
-    def crear_gasto(self, concepto: str, categoria: str, monto: float, nota: str | None = None) -> dict:
+   # ---------------- Gastos ----------------
+    def crear_gasto(self, concepto: str, categoria: str, monto: float, nota: str | None = None, metodo_pago: str = "EFECTIVO") -> dict:
         if not concepto or not concepto.strip():
             raise ValueError("concepto es obligatorio")
         if not categoria or not categoria.strip():
             raise ValueError("categoria es obligatoria")
+        if not metodo_pago or not metodo_pago.strip(): 
+            raise ValueError("metodo_pago es obligatorio")
         if monto is None or float(monto) <= 0:
             raise ValueError("monto debe ser > 0")
 
@@ -51,6 +53,7 @@ class SupabaseService:
             "categoria": categoria.strip(),
             "monto": round(float(monto), 2),
             "nota": nota.strip() if isinstance(nota, str) and nota.strip() else None,
+            "metodo_pago": metodo_pago.strip() # faltaba el metodo de pago
         }
         res = self.client.table("gastos").insert(data).execute()
         return res.data[0]
