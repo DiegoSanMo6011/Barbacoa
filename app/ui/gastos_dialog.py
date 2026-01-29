@@ -7,125 +7,164 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 
-
 class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
-        self.title("Gastos del día")
-        self.geometry("760x520")
+        self.title("Módulo de Gastos - Control de Suministros")
+        self.geometry("850x650")
         self.resizable(False, False)
-        self.grab_set()
+        self.grab_set()  # solo se puede interactuar con la ventana de adelante
 
         self.db = supabase
 
-        self.concepto_var = tk.StringVar()
-        self.categoria_var = tk.StringVar(value="GENERAL")
-        self.monto_var = tk.StringVar()
-        self.nota_var = tk.StringVar()
+        # --- CONFIGURACIÓN DE CATEGORÍAS ---
+        self.lista_categorias = ["INSUMOS", "GAS", "NOMINA", "MANTENIMIENTO", "GENERAL", "OTRO"]
+        self.metodos_pago = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"]
 
-        self.total_var = tk.StringVar(value="0.00")
+        # Variables de Control (Variables de Estado)
+        self.monto_var = tk.StringVar()
+        self.categoria_var = tk.StringVar(value=self.lista_categorias[0])
+        self.metodo_pago_var = tk.StringVar(value=self.metodos_pago[0])
+        self.concepto_var = tk.StringVar()
+        self.nota_var = tk.StringVar()
+        self.total_dia_var = tk.StringVar(value="$0.00")
 
         self._build_ui()
         self._load_gastos()
 
     def _build_ui(self):
-        form = ctk.CTkFrame(self)
-        form.pack(fill="x", padx=12, pady=12)
+        # 1. TÍTULO CON ESTILO
+        header = ctk.CTkFrame(self, fg_color="#2c3e50", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
+        ctk.CTkLabel(header, text="📦 REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 22, "bold"), text_color="white").pack(pady=15)
 
-        ctk.CTkLabel(form, text="Concepto:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(form, textvariable=self.concepto_var, width=220).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        # 2. FRAME DEL FORMULARIO
+        form_frame = ctk.CTkFrame(self)
+        form_frame.pack(fill="x", padx=20, pady=15)
 
-        ctk.CTkLabel(form, text="Categoría:").grid(row=0, column=2, padx=6, pady=6, sticky="w")
-        categorias = ["GENERAL", "INSUMOS", "GAS", "NOMINA", "MANTENIMIENTO", "OTRO"]
-        ctk.CTkOptionMenu(form, values=categorias, variable=self.categoria_var).grid(row=0, column=3, padx=6, pady=6, sticky="w")
+        # --- FILA 1: Labels de guía ---
+        ctk.CTkLabel(form_frame, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Categoría", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Método de Pago", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10, sticky="w")
 
-        ctk.CTkLabel(form, text="Monto:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(form, textvariable=self.monto_var, width=120).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        # --- FILA 2: Inputs principales ---
+        self.entry_monto = ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 450.00", width=140)
+        self.entry_monto.grid(row=1, column=0, padx=10, pady=(0, 15))
 
-        ctk.CTkLabel(form, text="Nota:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(form, textvariable=self.nota_var, width=220).grid(row=1, column=3, padx=6, pady=6, sticky="w")
+        self.menu_cat = ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=160)
+        self.menu_cat.grid(row=1, column=1, padx=10, pady=(0, 15))
 
-        btns = ctk.CTkFrame(self, fg_color="transparent")
-        btns.pack(fill="x", padx=12, pady=(0, 8))
-        ctk.CTkButton(btns, text="Guardar", command=self._guardar).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Refresh", command=self._load_gastos).pack(side="left", padx=6)
+        self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=160, fg_color="#34495e")
+        self.menu_pago.grid(row=1, column=2, padx=10, pady=(0, 15))
 
-        # Tabla de gastos del día
-        table_frame = ctk.CTkFrame(self)
-        table_frame.pack(fill="both", expand=True, padx=12, pady=8)
+        # --- FILA 3: Descripción y Botón ---
+        ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=("Arial", 12, "bold")).grid(row=2, column=0, columnspan=2, padx=10, sticky="w")
+        
+        self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó el crédito? (Ej: Compra de Cilantro)", width=480)
+        self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
 
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=("concepto", "categoria", "monto", "nota"),
-            show="headings",
-            height=12,
-        )
-        self.tree.heading("concepto", text="Concepto")
+        # Botón de Guardar 
+        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO 💾", font=("Arial", 14, "bold"), 
+                                     fg_color="#27ae60", hover_color="#1e8449", height=40,
+                                     command=self._guardar)
+        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
+
+        # 3. SECCIÓN DE HISTORIAL
+        list_frame = ctk.CTkFrame(self)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        # Encabezado de la tabla y Totalizador
+        table_header = ctk.CTkFrame(list_frame, fg_color="transparent")
+        table_header.pack(fill="x", padx=10, pady=10)
+        
+        ctk.CTkLabel(table_header, text="RESUMEN DE GASTOS DEL DÍA", font=("Arial", 14, "bold")).pack(side="left")
+        
+        total_display = ctk.CTkFrame(table_header, fg_color="#e74c3c", corner_radius=8)
+        total_display.pack(side="right")
+        ctk.CTkLabel(total_display, text="TOTAL:", font=("Arial", 13, "bold"), text_color="white").pack(side="left", padx=10)
+        ctk.CTkLabel(total_display, textvariable=self.total_dia_var, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=(0, 10))
+
+        # Configuración de la Tabla (Treeview)
+        cols = ("concepto", "categoria", "metodo", "monto")
+        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
+        
+        self.tree.heading("concepto", text="Descripción / Concepto")
         self.tree.heading("categoria", text="Categoría")
+        self.tree.heading("metodo", text="Método Pago")
         self.tree.heading("monto", text="Monto")
-        self.tree.heading("nota", text="Nota")
 
-        self.tree.column("concepto", width=220, anchor="w")
-        self.tree.column("categoria", width=140, anchor="center")
+        self.tree.column("concepto", width=300)
+        self.tree.column("categoria", width=120, anchor="center")
+        self.tree.column("metodo", width=120, anchor="center")
         self.tree.column("monto", width=100, anchor="e")
-        self.tree.column("nota", width=240, anchor="w")
 
-        self.tree.pack(fill="both", expand=True)
-
-        total_row = ctk.CTkFrame(self, fg_color="transparent")
-        total_row.pack(fill="x", padx=12, pady=(0, 10))
-        ctk.CTkLabel(total_row, text="Total del día:").pack(side="right", padx=(0, 6))
-        ctk.CTkLabel(total_row, textvariable=self.total_var, font=("Arial", 14, "bold")).pack(side="right")
+        # Scrollbar para la tabla
+        scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=scroller.set)
+        
+        self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
+        scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
 
     def _guardar(self):
+        # 1. Obtención de datos
         concepto = self.concepto_var.get().strip()
-        categoria = self.categoria_var.get().strip() or "GENERAL"
-        monto_txt = self.monto_var.get().strip()
-        nota = self.nota_var.get().strip() or None
+        categoria = self.categoria_var.get()
+        metodo = self.metodo_pago_var.get()
+        monto_raw = self.monto_var.get().strip()
 
+        # 2. Validaciones
         if not concepto:
-            messagebox.showwarning("Falta concepto", "Escribe el concepto del gasto.")
+            messagebox.showwarning("Falta Información", "Por favor, ingresa el concepto del gasto.")
             return
+        
         try:
-            monto = float(monto_txt)
-            if monto <= 0:
-                raise ValueError
-        except Exception:
-            messagebox.showwarning("Monto inválido", "El monto debe ser un número > 0.")
+            monto = float(monto_raw)
+            if monto <= 0: raise ValueError
+        except ValueError:
+            messagebox.showerror("Error de Monto", "Ingresa un monto válido mayor a 0.")
             return
 
+        # 3. Guardado en Supabase 
         try:
-            self.db.crear_gasto(concepto, categoria, monto, nota)
+            #supabase_service ahora recibe metodo_pago
+            self.db.crear_gasto(
+                concepto=concepto,
+                categoria=categoria,
+                monto=monto,
+                metodo_pago=metodo
+            )
+            
+            # 4. Feedback y Limpieza
+            messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente. ✅")
             self.concepto_var.set("")
             self.monto_var.set("")
-            self.nota_var.set("")
-            self._load_gastos()
-            messagebox.showinfo("OK", "Gasto guardado.")
+            self._load_gastos() # Refrescar la tabla
+            
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar el gasto:\n{e}")
+            messagebox.showerror("Error de Conexión", f"No se pudo sincronizar con la base de datos:\n{e}")
 
     def _load_gastos(self):
-        for row in self.tree.get_children():
-            self.tree.delete(row)
+        """Carga los gastos del día actual desde la base de datos."""
+        # Limpiar tabla
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+            
+        try:
+            gastos = self.db.listar_gastos_dia(date.today())
+            total_acumulado = 0.0
 
-        gastos = self.db.listar_gastos_dia(date.today())
-        total = 0.0
+            for g in gastos:
+                m = float(g.get("monto", 0))
+                total_acumulado += m
+                
+                self.tree.insert("", "end", values=(
+                    g.get("concepto", "N/A"),
+                    g.get("categoria", "GENERAL"),
+                    g.get("metodo_pago", "EFECTIVO"),
+                    f"${m:.2f}"
+                ))
 
-        for g in gastos:
-            concepto = g.get("concepto") or ""
-            categoria = g.get("categoria") or ""
-            monto = float(g.get("monto") or 0)
-            nota = g.get("nota") or ""
-            total += monto
-            self.tree.insert("", "end", values=(concepto, categoria, f"${monto:.2f}", nota))
+            self.total_dia_var.set(f"${total_acumulado:.2f}")
 
-        self.total_var.set(f"${total:.2f}")
-
-
-if __name__ == "__main__":
-    ctk.set_appearance_mode("light")
-    root = ctk.CTk()
-    root.withdraw()
-    db = SupabaseService()
-    dlg = GastosDialog(root, db)
-    dlg.mainloop()
+        except Exception as e:
+            print(f"DEBUG: Error cargando historial: {e}")
