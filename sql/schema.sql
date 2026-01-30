@@ -48,6 +48,7 @@ CREATE TABLE public.gastos (
   categoria text NOT NULL DEFAULT 'GENERAL'::text,
   monto numeric NOT NULL CHECK (monto > 0::numeric),
   nota text,
+  metodo_pago text NOT NULL DEFAULT 'EFECTIVO'::text,
   CONSTRAINT gastos_pkey PRIMARY KEY (id)
 );
 
