@@ -11,6 +11,56 @@ class SupabaseService:
         res = self.client.table("productos").select("*").eq("activo", True).order("categoria").execute()
         return res.data or []
 
+    def listar_productos(self) -> list[dict]:
+        res = self.client.table("productos").select("*").order("categoria").execute()
+        return res.data or []
+
+    def crear_producto(self, nombre: str, categoria: str, precio: float, activo: bool = True) -> dict:
+        if not nombre or not nombre.strip():
+            raise ValueError("nombre es obligatorio")
+        if not categoria or not categoria.strip():
+            raise ValueError("categoria es obligatoria")
+        if precio is None or float(precio) < 0:
+            raise ValueError("precio debe ser >= 0")
+        data = {
+            "nombre": nombre.strip(),
+            "categoria": categoria.strip(),
+            "precio": round(float(precio), 2),
+            "activo": bool(activo),
+        }
+        res = self.client.table("productos").insert(data).execute()
+        return res.data[0]
+
+    def actualizar_producto(
+        self,
+        producto_id: int,
+        nombre: str | None = None,
+        categoria: str | None = None,
+        precio: float | None = None,
+        activo: bool | None = None,
+    ) -> dict:
+        if producto_id is None:
+            raise ValueError("producto_id es obligatorio")
+        data: dict = {}
+        if nombre is not None:
+            if not nombre.strip():
+                raise ValueError("nombre es obligatorio")
+            data["nombre"] = nombre.strip()
+        if categoria is not None:
+            if not categoria.strip():
+                raise ValueError("categoria es obligatoria")
+            data["categoria"] = categoria.strip()
+        if precio is not None:
+            if float(precio) < 0:
+                raise ValueError("precio debe ser >= 0")
+            data["precio"] = round(float(precio), 2)
+        if activo is not None:
+            data["activo"] = bool(activo)
+        if not data:
+            raise ValueError("no hay cambios para actualizar")
+        res = self.client.table("productos").update(data).eq("id", producto_id).execute()
+        return res.data[0]
+
     def crear_comanda(self, mesero: str, metodo_pago: str, total: float, recibido: float | None, cambio: float | None):
         data = {
             "mesero": mesero,
@@ -56,6 +106,48 @@ class SupabaseService:
             "metodo_pago": metodo_pago.strip() # faltaba el metodo de pago
         }
         res = self.client.table("gastos").insert(data).execute()
+        return res.data[0]
+
+    # ---------------- Meseros ----------------
+    def listar_meseros_activos(self) -> list[dict]:
+        res = (
+            self.client.table("meseros")
+            .select("id, nombre, activo")
+            .eq("activo", True)
+            .order("nombre")
+            .execute()
+        )
+        return res.data or []
+
+    def listar_meseros(self) -> list[dict]:
+        res = (
+            self.client.table("meseros")
+            .select("id, nombre, activo")
+            .order("nombre")
+            .execute()
+        )
+        return res.data or []
+
+    def crear_mesero(self, nombre: str) -> dict:
+        if not nombre or not nombre.strip():
+            raise ValueError("nombre es obligatorio")
+        data = {"nombre": nombre.strip(), "activo": True}
+        res = self.client.table("meseros").insert(data).execute()
+        return res.data[0]
+
+    def actualizar_mesero(self, mesero_id: str, nombre: str | None = None, activo: bool | None = None) -> dict:
+        if not mesero_id:
+            raise ValueError("mesero_id es obligatorio")
+        data: dict = {}
+        if nombre is not None:
+            if not nombre.strip():
+                raise ValueError("nombre es obligatorio")
+            data["nombre"] = nombre.strip()
+        if activo is not None:
+            data["activo"] = bool(activo)
+        if not data:
+            raise ValueError("no hay cambios para actualizar")
+        res = self.client.table("meseros").update(data).eq("id", mesero_id).execute()
         return res.data[0]
 
     def listar_gastos_dia(self, fecha: date) -> list[dict]:

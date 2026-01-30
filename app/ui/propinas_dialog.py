@@ -21,8 +21,7 @@ class PropinasDialog(ctk.CTkToplevel):
         self.mesero_map: dict[str, str] = {}
 
         self.monto_var = tk.StringVar()
-        self.mesero_var = tk.StringVar(value="OTRO / MANUAL")
-        self.mesero_manual_var = tk.StringVar()
+        self.mesero_var = tk.StringVar()
 
         today = date.today()
         self.year_var = tk.StringVar(value=str(today.year))
@@ -33,17 +32,17 @@ class PropinasDialog(ctk.CTkToplevel):
         self._load_reporte()
 
     def _build_ui(self):
-        # Section A: registro manual
+        # Section A: registro
         header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
-        self.logo_img = load_logo(28)
+        self.logo_img = load_logo(40)
         if self.logo_img:
-            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 6), pady=12)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
         ctk.CTkLabel(header, text="PROPINAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
         sec_a = ctk.CTkFrame(self)
         sec_a.pack(fill="x", padx=12, pady=12)
-        ctk.CTkLabel(sec_a, text="Registrar propina manual", font=("Arial", 14, "bold")).grid(
+        ctk.CTkLabel(sec_a, text="Registrar propina", font=("Arial", 14, "bold")).grid(
             row=0, column=0, columnspan=4, padx=6, pady=(6, 10), sticky="w"
         )
 
@@ -53,15 +52,12 @@ class PropinasDialog(ctk.CTkToplevel):
         ctk.CTkLabel(sec_a, text="Mesero:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
         self.mesero_menu = ctk.CTkOptionMenu(
             sec_a,
-            values=["OTRO / MANUAL"],
+            values=[],
             variable=self.mesero_var,
             command=self._on_mesero_selected,
         )
         self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
-        ctk.CTkLabel(sec_a, text="Nombre manual:").grid(row=2, column=0, padx=6, pady=6, sticky="w")
-        self.mesero_manual_entry = ctk.CTkEntry(sec_a, textvariable=self.mesero_manual_var, width=220)
-        self.mesero_manual_entry.grid(row=2, column=1, padx=6, pady=6, sticky="w")
 
         ctk.CTkButton(sec_a, text="Guardar", command=self._guardar_propina).grid(
             row=2, column=3, padx=6, pady=6, sticky="e"
@@ -111,15 +107,8 @@ class PropinasDialog(ctk.CTkToplevel):
         self.tree.pack(fill="both", expand=True)
 
     def _on_mesero_selected(self, value: str):
-        if value == "OTRO / MANUAL":
-            self.mesero_manual_entry.configure(state="normal")
-            self.mesero_manual_var.set("")
-            self.mesero_manual_entry.focus()
-            return
-
-        # Bloquea entrada manual y usa el nombre del menu como snapshot
-        self.mesero_manual_entry.configure(state="disabled")
-        self.mesero_manual_var.set(value)
+        # Usa el nombre del menu como snapshot
+        return
 
     def _load_meseros(self):
         try:
@@ -144,10 +133,11 @@ class PropinasDialog(ctk.CTkToplevel):
             self.mesero_map[nombre] = mid
             names.append(nombre)
 
-        values = names + ["OTRO / MANUAL"]
+        values = names
         self.mesero_menu.configure(values=values)
-        self.mesero_var.set("OTRO / MANUAL")
-        self._on_mesero_selected("OTRO / MANUAL")
+        if values:
+            self.mesero_var.set(values[0])
+            self._on_mesero_selected(values[0])
 
     def _guardar_propina(self):
         monto_txt = self.monto_var.get().strip()
@@ -160,15 +150,11 @@ class PropinasDialog(ctk.CTkToplevel):
             return
 
         sel = self.mesero_var.get()
-        if sel != "OTRO / MANUAL":
-            mesero_id = self.mesero_map.get(sel)
-            mesero_name = sel
-        else:
-            mesero_id = None
-            mesero_name = self.mesero_manual_var.get().strip() or None
-            if not mesero_name:
-                messagebox.showwarning("Falta mesero", "Escribe el nombre del mesero.")
-                return
+        mesero_id = self.mesero_map.get(sel)
+        mesero_name = sel or None
+        if not mesero_name:
+            messagebox.showwarning("Falta mesero", "Selecciona un mesero.")
+            return
 
         try:
             self.db.crear_propina(
@@ -179,8 +165,6 @@ class PropinasDialog(ctk.CTkToplevel):
                 comanda_id=None,
             )
             self.monto_var.set("")
-            if sel == "OTRO / MANUAL":
-                self.mesero_manual_var.set("")
             self._load_reporte()
             messagebox.showinfo("OK", "Propina guardada.")
         except Exception as e:

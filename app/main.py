@@ -12,6 +12,8 @@ from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
 from ui.corte_view import CorteView
 from ui.reportes_view import ReportesView
+from ui.personal_dialog import PersonalDialog
+from ui.productos_dialog import ProductosDialog
 
 
 class POSApp(tk.Tk):
@@ -32,6 +34,8 @@ class POSApp(tk.Tk):
         style.configure("TButton", padding=8, font=("Arial", 10, "bold"))
         style.configure("Accent.TButton", padding=10, font=("Arial", 11, "bold"), foreground="white", background="#1d4ed8")
         style.map("Accent.TButton", background=[("active", "#1e40af")])
+        style.configure("Danger.TButton", padding=8, font=("Arial", 10, "bold"), foreground="white", background="#dc2626")
+        style.map("Danger.TButton", background=[("active", "#b91c1c")])
         style.configure("Treeview.Heading", font=("Arial", 14, "bold"))
         style.configure("Treeview", rowheight=44, font=("Arial", 14))
         style.configure("Header.TLabel", font=("Arial", 18, "bold"))
@@ -47,7 +51,7 @@ class POSApp(tk.Tk):
         self._comandas_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "comandas_abiertas.json"))
 
         self._build_ui()
-        self.after(100, lambda: self.mesero_entry.focus_set())
+        self.after(100, lambda: self.mesero_menu.focus_set())
         self._load_comandas()
         self._refresh_catalog()
         self._bind_shortcuts()
@@ -62,7 +66,7 @@ class POSApp(tk.Tk):
         left_top = tk.Frame(top, bg="#1f2937")
         left_top.pack(side="left", padx=12, pady=8)
 
-        self.logo_img = load_logo(44)
+        self.logo_img = load_logo(72)
         if self.logo_img:
             tk.Label(left_top, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(0, 8))
         tk.Label(left_top, text="BARBACOA POS", font=("Arial", 18, "bold"), fg="white", bg="#1f2937").pack(side="left")
@@ -71,6 +75,8 @@ class POSApp(tk.Tk):
         center_top.pack(side="left", padx=16, pady=6)
         ttk.Button(center_top, text="Gastos", command=self._open_gastos).pack(side="left", padx=4, pady=6)
         ttk.Button(center_top, text="Propinas", command=self._open_propinas).pack(side="left", padx=4, pady=6)
+        ttk.Button(center_top, text="Personal", command=self._open_personal).pack(side="left", padx=4, pady=6)
+        ttk.Button(center_top, text="Productos", command=self._open_productos).pack(side="left", padx=4, pady=6)
         ttk.Button(center_top, text="Corte", command=self._open_corte).pack(side="left", padx=4, pady=6)
         ttk.Button(center_top, text="Reportes", command=self._open_reportes).pack(side="left", padx=4, pady=6)
 
@@ -78,10 +84,13 @@ class POSApp(tk.Tk):
         right_top.pack(side="right", padx=12, pady=6)
         tk.Label(right_top, text="Mesero", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e")
         self.mesero_var = tk.StringVar()
-        self.mesero_entry = ttk.Entry(right_top, textvariable=self.mesero_var, width=24)
-        self.mesero_entry.pack(anchor="e", pady=(2, 0))
-        self.mesero_entry.bind("<Return>", lambda _e: self.search_entry.focus_set())
-        self.mesero_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
+        self.mesero_menu = ttk.Combobox(right_top, textvariable=self.mesero_var, state="normal", width=22)
+        self.mesero_menu.pack(anchor="e", pady=(2, 0))
+        self.mesero_menu.bind("<<ComboboxSelected>>", lambda _e: self._save_current_to_state())
+        self.mesero_menu.bind("<Return>", lambda _e: self.search_entry.focus_set())
+        self.mesero_menu.bind("<Button-1>", lambda _e: self._refresh_meseros_dropdown())
+        self.mesero_menu.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
+        self._refresh_meseros_dropdown()
 
         tk.Label(right_top, text="Mesa", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e", pady=(6, 0))
         self.mesa_var = tk.StringVar()
@@ -91,6 +100,7 @@ class POSApp(tk.Tk):
 
         self.clock_var = tk.StringVar()
         tk.Label(right_top, textvariable=self.clock_var, fg="#e5e7eb", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e", pady=(6, 0))
+        ttk.Button(right_top, text="Salir", style="Danger.TButton", command=self._exit_app).pack(anchor="e", pady=(6, 0))
 
         # Main split
         main = ttk.Frame(self, padding=10)
@@ -265,9 +275,14 @@ class POSApp(tk.Tk):
         self.bind_all("<Control-s>", lambda _e: self._save_comanda())
         self.bind_all("<Control-n>", lambda _e: self._new_comanda())
         self.bind_all("<Control-f>", lambda _e: self.search_entry.focus_set())
-        self.bind_all("<Control-m>", lambda _e: self.mesero_entry.focus_set())
+        self.bind_all("<Control-m>", lambda _e: self.mesero_menu.focus_set())
         self.bind_all("<Control-d>", lambda _e: self._remove_selected())
         self.bind_all("<Control-l>", lambda _e: self._clear_all())
+        self.bind_all("<Control-q>", lambda _e: self._exit_app())
+
+    def _exit_app(self):
+        if messagebox.askyesno("Salir", "¿Cerrar el POS?"):
+            self.destroy()
 
     def _tick_clock(self):
         self.clock_var.set(datetime.now().strftime("%H:%M:%S"))
@@ -312,11 +327,12 @@ class POSApp(tk.Tk):
     def _new_comanda(self):
         if self.active_comanda is not None:
             self._save_current_to_state()
+        default_mesa = self._next_mesa_default()
         self.comandas.append({
             "folio_local": f"TMP-{datetime.now().strftime('%H%M%S')}",
             "created_at": datetime.now().isoformat(timespec="seconds"),
-            "mesero": "",
-            "mesa": "",
+            "mesero": self.mesero_var.get().strip(),
+            "mesa": default_mesa,
             "metodo": "EFECTIVO",
             "propina": "",
             "recibido": "",
@@ -355,6 +371,15 @@ class POSApp(tk.Tk):
             self.comandas_list.selection_clear(0, tk.END)
             self.comandas_list.selection_set(self.active_comanda)
             self.comandas_list.activate(self.active_comanda)
+
+    def _next_mesa_default(self) -> str:
+        # Busca el último número de mesa usado y suma 1
+        last = 0
+        for c in self.comandas:
+            mesa = str(c.get("mesa") or "").strip()
+            if mesa.isdigit():
+                last = max(last, int(mesa))
+        return str(last + 1) if last else "1"
 
     def _close_comanda(self):
         if self.active_comanda is None:
@@ -485,7 +510,7 @@ class POSApp(tk.Tk):
         self._refresh_ticket()
         if hasattr(self, "propina_var"):
             self.propina_var.set("")
-        self.mesero_entry.focus_set()
+        self.mesero_menu.focus_set()
         self._save_current_to_state()
 
     def _inc_selected(self):
@@ -666,6 +691,31 @@ class POSApp(tk.Tk):
 
     def _open_reportes(self):
         ReportesView(self, self.db)
+
+    def _open_personal(self):
+        dlg = PersonalDialog(self, self.db)
+        self.wait_window(dlg)
+        self._refresh_meseros_dropdown()
+
+    def _open_productos(self):
+        dlg = ProductosDialog(self, self.db)
+        self.wait_window(dlg)
+        self.productos = self.db.get_productos()
+        self._refresh_catalog()
+
+    def _refresh_meseros_dropdown(self):
+        try:
+            meseros = self.db.listar_meseros_activos()
+            nombres = [m.get("nombre") for m in meseros if m.get("nombre")]
+        except Exception:
+            nombres = []
+        current = self.mesero_var.get().strip()
+        values = nombres
+        if current and current not in values:
+            values = [current] + values
+        self.mesero_menu.configure(values=values)
+        if not current and values:
+            self.mesero_var.set(values[0])
 
 
 if __name__ == "__main__":
