@@ -6,11 +6,12 @@ from tkinter import ttk, messagebox
 import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
+from ui.assets import load_logo
 
 class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
-        self.title("Módulo de Gastos - Control de Suministros")
+        self.title("Gastos - Control de Suministros")
         self.geometry("850x650")
         self.resizable(False, False)
         self.grab_set()  # solo se puede interactuar con la ventana de adelante
@@ -34,9 +35,12 @@ class GastosDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         # 1. TÍTULO CON ESTILO
-        header = ctk.CTkFrame(self, fg_color="#2c3e50", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
-        ctk.CTkLabel(header, text="📦 REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 22, "bold"), text_color="white").pack(pady=15)
+        self.logo_img = load_logo(28)
+        if self.logo_img:
+            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 6), pady=12)
+        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=(6, 12), pady=12)
 
         # 2. FRAME DEL FORMULARIO
         form_frame = ctk.CTkFrame(self)
@@ -64,7 +68,7 @@ class GastosDialog(ctk.CTkToplevel):
         self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
 
         # Botón de Guardar 
-        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO 💾", font=("Arial", 14, "bold"), 
+        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO", font=("Arial", 14, "bold"), 
                                      fg_color="#27ae60", hover_color="#1e8449", height=40,
                                      command=self._guardar)
         self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
@@ -79,7 +83,7 @@ class GastosDialog(ctk.CTkToplevel):
         
         ctk.CTkLabel(table_header, text="RESUMEN DE GASTOS DEL DÍA", font=("Arial", 14, "bold")).pack(side="left")
         
-        total_display = ctk.CTkFrame(table_header, fg_color="#e74c3c", corner_radius=8)
+        total_display = ctk.CTkFrame(table_header, fg_color="#dc2626", corner_radius=8)
         total_display.pack(side="right")
         ctk.CTkLabel(total_display, text="TOTAL:", font=("Arial", 13, "bold"), text_color="white").pack(side="left", padx=10)
         ctk.CTkLabel(total_display, textvariable=self.total_dia_var, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=(0, 10))
@@ -135,7 +139,7 @@ class GastosDialog(ctk.CTkToplevel):
             )
             
             # 4. Feedback y Limpieza
-            messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente. ✅")
+            messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
             self.concepto_var.set("")
             self.monto_var.set("")
             self._load_gastos() # Refrescar la tabla

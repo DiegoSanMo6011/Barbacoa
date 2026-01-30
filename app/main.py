@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
+from ui.assets import load_logo
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
-from ui.cierre_dialog import CierreDialog
 from ui.corte_view import CorteView
 from ui.reportes_view import ReportesView
 
@@ -13,8 +14,11 @@ from ui.reportes_view import ReportesView
 class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Barbacoa POS - Demo Profesional (Tk)")
+        ctk.set_appearance_mode("light")
+        self.title("Barbacoa POS")
         self.geometry("1100x700")
+        self.attributes("-fullscreen", True)
+        self.bind("<Escape>", lambda _e: self.attributes("-fullscreen", False))
 
         # Estilo ttk (se ve pro)
         style = ttk.Style(self)
@@ -22,9 +26,12 @@ class POSApp(tk.Tk):
             style.theme_use("clam")
         except Exception:
             pass
-        style.configure("TButton", padding=8)
+        style.configure("TButton", padding=8, font=("Arial", 10, "bold"))
         style.configure("Treeview.Heading", font=("Arial", 11, "bold"))
         style.configure("Treeview", rowheight=28, font=("Arial", 10))
+        style.configure("Header.TLabel", font=("Arial", 18, "bold"))
+        style.configure("Section.TLabel", font=("Arial", 12, "bold"))
+        style.configure("Total.TLabel", font=("Arial", 18, "bold"))
 
         self.db = SupabaseService()
         self.productos = self.db.get_productos()
@@ -37,22 +44,24 @@ class POSApp(tk.Tk):
     # ---------------- UI ----------------
     def _build_ui(self):
         # Top bar
-        top = ttk.Frame(self, padding=10)
+        top = tk.Frame(self, bg="#1f2937")
         top.pack(fill="x")
 
-        ttk.Label(top, text="BARBACOA POS", font=("Arial", 18, "bold")).pack(side="left")
+        self.logo_img = load_logo(28)
+        if self.logo_img:
+            tk.Label(top, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=10)
+        tk.Label(top, text="BARBACOA POS", font=("Arial", 18, "bold"), fg="white", bg="#1f2937").pack(side="left", padx=(6, 12), pady=10)
 
         btns = ttk.Frame(top)
-        btns.pack(side="left", padx=10)
-        ttk.Button(btns, text="Gastos", command=self._open_gastos).pack(side="left", padx=4)
-        ttk.Button(btns, text="Propinas", command=self._open_propinas).pack(side="left", padx=4)
-        ttk.Button(btns, text="Cierre", command=self._open_cierre).pack(side="left", padx=4)
-        ttk.Button(btns, text="Corte", command=self._open_corte).pack(side="left", padx=4)
-        ttk.Button(btns, text="Reportes", command=self._open_reportes).pack(side="left", padx=4)
+        btns.pack(side="left", padx=8)
+        ttk.Button(btns, text="Gastos", command=self._open_gastos).pack(side="left", padx=4, pady=8)
+        ttk.Button(btns, text="Propinas", command=self._open_propinas).pack(side="left", padx=4, pady=8)
+        ttk.Button(btns, text="Corte", command=self._open_corte).pack(side="left", padx=4, pady=8)
+        ttk.Button(btns, text="Reportes", command=self._open_reportes).pack(side="left", padx=4, pady=8)
 
-        ttk.Label(top, text="Mesero:").pack(side="right")
+        tk.Label(top, text="Mesero:", fg="white", bg="#1f2937", font=("Arial", 10, "bold")).pack(side="right", padx=(0, 6))
         self.mesero_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.mesero_var, width=20).pack(side="right", padx=(0, 10))
+        ttk.Entry(top, textvariable=self.mesero_var, width=20).pack(side="right", padx=(0, 12), pady=10)
 
         # Main split
         main = ttk.Frame(self, padding=10)
@@ -65,7 +74,7 @@ class POSApp(tk.Tk):
         right.pack(side="right", fill="both", expand=True)
 
         # Left: filters + catalog
-        ttk.Label(left, text="Catálogo", font=("Arial", 12, "bold")).pack(anchor="w")
+        ttk.Label(left, text="Catálogo", style="Section.TLabel").pack(anchor="w")
 
         self.search_var = tk.StringVar()
         search_entry = ttk.Entry(left, textvariable=self.search_var, width=30)
@@ -80,7 +89,7 @@ class POSApp(tk.Tk):
         self.cat_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_catalog())
 
         # Product listbox
-        self.prod_list = tk.Listbox(left, height=25)
+        self.prod_list = tk.Listbox(left, height=25, font=("Arial", 10))
         self.prod_list.pack(fill="both", expand=True)
         self.prod_list.bind("<Double-Button-1>", lambda _e: self._add_selected_product())
 
@@ -90,10 +99,10 @@ class POSApp(tk.Tk):
         self.qty_var = tk.StringVar(value="1")
         ttk.Entry(qty_row, textvariable=self.qty_var, width=6).pack(side="left", padx=6)
 
-        ttk.Button(left, text="Agregar →", command=self._add_selected_product).pack(fill="x")
+        ttk.Button(left, text="Agregar", command=self._add_selected_product).pack(fill="x")
 
         # Right: ticket table
-        ttk.Label(right, text="Comanda (Ticket)", font=("Arial", 12, "bold")).pack(anchor="w")
+        ttk.Label(right, text="Comanda", style="Section.TLabel").pack(anchor="w")
 
         table_frame = ttk.Frame(right)
         table_frame.pack(fill="both", expand=True, pady=8)
@@ -117,13 +126,16 @@ class POSApp(tk.Tk):
         ttk.Button(btns, text="Eliminar seleccionado (Del)", command=self._remove_selected).pack(side="left", padx=5)
         ttk.Button(btns, text="Vaciar", command=self._clear_all).pack(side="left", padx=5)
 
+        ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(10, 6))
+        ttk.Label(right, text="Cobro", style="Section.TLabel").pack(anchor="w")
+
         # Payment + total
         pay = ttk.Frame(right, padding=(0, 10))
         pay.pack(fill="x")
 
         self.total_var = tk.StringVar(value="0.00")
-        ttk.Label(pay, text="TOTAL:", font=("Arial", 16, "bold")).pack(side="left")
-        ttk.Label(pay, textvariable=self.total_var, font=("Arial", 16, "bold")).pack(side="left", padx=(6, 0))
+        ttk.Label(pay, text="TOTAL:", style="Total.TLabel").pack(side="left")
+        ttk.Label(pay, textvariable=self.total_var, style="Total.TLabel").pack(side="left", padx=(6, 0))
 
         pay2 = ttk.Frame(right)
         pay2.pack(fill="x")
@@ -298,7 +310,7 @@ class POSApp(tk.Tk):
                     fuente="COMANDA",
                     comanda_id=comanda["id"],
                 )
-            messagebox.showinfo("OK", f"Comanda guardada ✅\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             self._clear_all()
             self.mesero_var.set("")
             self.recibido_var.set("")
@@ -312,9 +324,6 @@ class POSApp(tk.Tk):
 
     def _open_propinas(self):
         PropinasDialog(self, self.db)
-
-    def _open_cierre(self):
-        CierreDialog(self, self.db)
 
     def _open_corte(self):
         CorteView(self, self.db)

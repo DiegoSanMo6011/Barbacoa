@@ -77,7 +77,7 @@ class POSApp(tk.Tk):
         self.qty_var = tk.StringVar(value="1")
         ttk.Entry(qty_row, textvariable=self.qty_var, width=6).pack(side="left", padx=6)
 
-        ttk.Button(left, text="Agregar →", command=self._add_selected_product).pack(fill="x")
+        ttk.Button(left, text="Agregar", command=self._add_selected_product).pack(fill="x")
 
         # Right: ticket table
         ttk.Label(right, text="Comanda (Ticket)", font=("Arial", 12, "bold")).pack(anchor="w")
@@ -259,7 +259,7 @@ class POSApp(tk.Tk):
         try:
             comanda = self.db.crear_comanda(mesero, metodo, total, recibido, cambio)
             self.db.agregar_items(comanda["id"], self.items)
-            messagebox.showinfo("OK", f"Comanda guardada ✅\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             self._clear_all()
             self.mesero_var.set("")
             self.recibido_var.set("")
@@ -271,4 +271,3 @@ class POSApp(tk.Tk):
 if __name__ == "__main__":
     app = POSApp()
     app.mainloop()
-

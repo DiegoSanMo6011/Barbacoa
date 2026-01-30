@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, timedelta, datetime
-import os
 import csv
 import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
 
+from ui.assets import load_logo
 from services.reportes_service import (
     get_top_productos,
     get_ventas_por_dia,
@@ -45,16 +45,16 @@ class ReportesView(ctk.CTkToplevel):
         self._load_reportes()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self)
-        header.pack(fill="x", padx=12, pady=12)
+        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
 
-        self.logo_img = self._load_logo()
+        self.logo_img = load_logo(28)
         if self.logo_img:
-            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(6, 8))
-        ctk.CTkLabel(header, text="Reportes", font=("Arial", 16, "bold")).pack(side="left", padx=6)
+            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 8), pady=10)
+        ctk.CTkLabel(header, text="REPORTES", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=6, pady=10)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
-        date_row.pack(side="right")
+        date_row.pack(side="right", padx=12)
         ctk.CTkLabel(date_row, text="Inicio:").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_inicio_var, width=120).pack(side="left", padx=6)
         ctk.CTkLabel(date_row, text="Fin:").pack(side="left", padx=6)
@@ -64,7 +64,7 @@ class ReportesView(ctk.CTkToplevel):
         ctk.CTkButton(date_row, text="Gráficas", command=self._open_graficas).pack(side="left", padx=6)
 
         resumen = ctk.CTkFrame(self)
-        resumen.pack(fill="x", padx=12, pady=(0, 12))
+        resumen.pack(fill="x", padx=12, pady=(12, 12))
 
         def _row(label: str, var: tk.StringVar, r: int):
             ctk.CTkLabel(resumen, text=label).grid(row=r, column=0, padx=6, pady=4, sticky="w")
@@ -223,21 +223,3 @@ class ReportesView(ctk.CTkToplevel):
             self._ventas_por_dia,
             self._ventas_por_mesero,
         )
-
-    def _load_logo(self) -> tk.PhotoImage | None:
-        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
-        candidates = ("logo_barbacoa.png", "file.png", "logo.png")
-        for name in candidates:
-            path = os.path.join(base, name)
-            if not os.path.exists(path):
-                continue
-            try:
-                img = tk.PhotoImage(file=path)
-                max_px = 32
-                if img.width() > max_px:
-                    factor = max(1, img.width() // max_px)
-                    img = img.subsample(factor, factor)
-                return img
-            except Exception:
-                return None
-        return None

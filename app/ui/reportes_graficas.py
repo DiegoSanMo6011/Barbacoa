@@ -32,7 +32,7 @@ class ReportesGraficas(ctk.CTkToplevel):
     def _build_ui(self):
         header = ctk.CTkFrame(self)
         header.pack(fill="x", padx=12, pady=12)
-        title = f"Gráficas {self.fecha_inicio.isoformat()} → {self.fecha_fin.isoformat()}"
+        title = f"Gráficas {self.fecha_inicio.isoformat()} a {self.fecha_fin.isoformat()}"
         ctk.CTkLabel(header, text=title, font=("Arial", 16, "bold")).pack(side="left", padx=6)
 
         grid = ctk.CTkFrame(self)
@@ -44,7 +44,7 @@ class ReportesGraficas(ctk.CTkToplevel):
         right.pack(side="right", fill="both", expand=True, padx=(6, 0))
 
         ctk.CTkLabel(left, text="Ventas por método", font=("Arial", 13, "bold")).pack(anchor="w", padx=8, pady=(8, 0))
-        metodo_canvas = tk.Canvas(left, width=440, height=220, bg="#222222", highlightthickness=0)
+        metodo_canvas = tk.Canvas(left, width=440, height=220, bg="#f3f4f6", highlightthickness=0)
         metodo_canvas.pack(padx=8, pady=8)
         self._draw_bar_chart(
             metodo_canvas,
@@ -57,13 +57,13 @@ class ReportesGraficas(ctk.CTkToplevel):
         )
 
         ctk.CTkLabel(left, text="Ventas por día", font=("Arial", 13, "bold")).pack(anchor="w", padx=8, pady=(2, 0))
-        dia_canvas = tk.Canvas(left, width=440, height=240, bg="#222222", highlightthickness=0)
+        dia_canvas = tk.Canvas(left, width=440, height=240, bg="#f3f4f6", highlightthickness=0)
         dia_canvas.pack(padx=8, pady=8)
         dia_data = [(r.get("fecha"), r.get("total", 0)) for r in self.ventas_por_dia]
         self._draw_bar_chart(dia_canvas, dia_data, bar_color="#2a9d8f")
 
         ctk.CTkLabel(right, text="Ventas por mesero (Top)", font=("Arial", 13, "bold")).pack(anchor="w", padx=8, pady=(8, 0))
-        mesero_canvas = tk.Canvas(right, width=440, height=480, bg="#222222", highlightthickness=0)
+        mesero_canvas = tk.Canvas(right, width=440, height=480, bg="#f3f4f6", highlightthickness=0)
         mesero_canvas.pack(padx=8, pady=8)
         mesero_data = [(r.get("mesero"), r.get("total", 0)) for r in self.ventas_por_mesero]
         self._draw_bar_chart(mesero_canvas, mesero_data, bar_color="#457b9d", rotate_labels=True)
@@ -71,7 +71,7 @@ class ReportesGraficas(ctk.CTkToplevel):
     def _draw_bar_chart(self, canvas: tk.Canvas, data: list[tuple], bar_color: str, rotate_labels: bool = False):
         canvas.delete("all")
         if not data:
-            canvas.create_text(220, 110, text="Sin datos", fill="#cccccc", font=("Arial", 12, "bold"))
+            canvas.create_text(220, 110, text="Sin datos", fill="#6b7280", font=("Arial", 12, "bold"))
             return
 
         width = int(canvas["width"])
@@ -89,9 +89,9 @@ class ReportesGraficas(ctk.CTkToplevel):
             y1 = height - padding
 
             canvas.create_rectangle(x0, y0, x1, y1, fill=bar_color, outline="")
-            canvas.create_text((x0 + x1) // 2, y0 - 10, text=f"${v:.0f}", fill="#eaeaea", font=("Arial", 9))
+            canvas.create_text((x0 + x1) // 2, y0 - 10, text=f"${v:.0f}", fill="#111827", font=("Arial", 9))
 
             if rotate_labels:
-                canvas.create_text((x0 + x1) // 2, height - padding + 18, text=label, fill="#cfcfcf", angle=30, font=("Arial", 8))
+                canvas.create_text((x0 + x1) // 2, height - padding + 18, text=label, fill="#374151", angle=30, font=("Arial", 8))
             else:
-                canvas.create_text((x0 + x1) // 2, height - padding + 12, text=label, fill="#cfcfcf", font=("Arial", 9))
+                canvas.create_text((x0 + x1) // 2, height - padding + 12, text=label, fill="#374151", font=("Arial", 9))

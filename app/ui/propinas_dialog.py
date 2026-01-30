@@ -6,6 +6,7 @@ from tkinter import ttk, messagebox
 import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
+from ui.assets import load_logo
 
 
 class PropinasDialog(ctk.CTkToplevel):
@@ -33,6 +34,13 @@ class PropinasDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         # Section A: registro manual
+        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
+        self.logo_img = load_logo(28)
+        if self.logo_img:
+            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 6), pady=12)
+        ctk.CTkLabel(header, text="PROPINAS", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=(6, 12), pady=12)
+
         sec_a = ctk.CTkFrame(self)
         sec_a.pack(fill="x", padx=12, pady=12)
         ctk.CTkLabel(sec_a, text="Registrar propina manual", font=("Arial", 14, "bold")).grid(

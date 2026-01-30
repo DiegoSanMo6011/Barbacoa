@@ -36,12 +36,16 @@ class CierreDialog(ctk.CTkToplevel):
         self._check_cierre()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self)
-        header.pack(fill="x", padx=12, pady=12)
+        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
+        ctk.CTkLabel(header, text="CIERRE DE CAJA", font=("Arial", 18, "bold"), text_color="#111827").pack(pady=15)
 
-        ctk.CTkLabel(header, text="Cierre de caja", font=("Arial", 16, "bold")).pack(side="left", padx=6)
+        top_bar = ctk.CTkFrame(self)
+        top_bar.pack(fill="x", padx=12, pady=(12, 8))
 
-        date_row = ctk.CTkFrame(header, fg_color="transparent")
+        ctk.CTkLabel(top_bar, text="Resumen del día", font=("Arial", 14, "bold")).pack(side="left", padx=6)
+
+        date_row = ctk.CTkFrame(top_bar, fg_color="transparent")
         date_row.pack(side="right")
         ctk.CTkLabel(date_row, text="Fecha (YYYY-MM-DD):").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_var, width=140).pack(side="left", padx=6)
