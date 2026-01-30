@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
@@ -48,6 +49,9 @@ class CorteView(ctk.CTkToplevel):
         header = ctk.CTkFrame(self)
         header.pack(fill="x", padx=12, pady=12)
 
+        self.logo_img = self._load_logo()
+        if self.logo_img:
+            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(6, 8))
         ctk.CTkLabel(header, text="Corte del día", font=("Arial", 16, "bold")).pack(side="left", padx=6)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
@@ -204,3 +208,21 @@ class CorteView(ctk.CTkToplevel):
             self._refresh()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo guardar el corte:\n{e}")
+
+    def _load_logo(self) -> tk.PhotoImage | None:
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
+        candidates = ("logo_barbacoa.png", "file.png", "logo.png")
+        for name in candidates:
+            path = os.path.join(base, name)
+            if not os.path.exists(path):
+                continue
+            try:
+                img = tk.PhotoImage(file=path)
+                max_px = 36
+                if img.width() > max_px:
+                    factor = max(1, img.width() // max_px)
+                    img = img.subsample(factor, factor)
+                return img
+            except Exception:
+                return None
+        return None

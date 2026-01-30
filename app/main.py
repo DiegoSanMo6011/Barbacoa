@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -22,6 +23,7 @@ class POSApp(tk.Tk):
         except Exception:
             pass
         style.configure("TButton", padding=8)
+        style.configure("Header.TButton", padding=6)
         style.configure("Treeview.Heading", font=("Arial", 11, "bold"))
         style.configure("Treeview", rowheight=28, font=("Arial", 10))
 
@@ -39,18 +41,32 @@ class POSApp(tk.Tk):
         top = ttk.Frame(self, padding=10)
         top.pack(fill="x")
 
-        ttk.Label(top, text="BARBACOA POS", font=("Arial", 18, "bold")).pack(side="left")
+        left_header = ttk.Frame(top)
+        left_header.pack(side="left")
+
+        self.logo_img = self._load_logo()
+        if self.logo_img:
+            ttk.Label(left_header, image=self.logo_img).pack(side="left", padx=(0, 10))
+
+        title_box = ttk.Frame(left_header)
+        title_box.pack(side="left")
+        ttk.Label(title_box, text="BARBACOA POS", font=("Arial", 18, "bold")).pack(anchor="w")
+        ttk.Label(title_box, text="Sistema de ventas y control", font=("Arial", 9)).pack(anchor="w")
 
         btns = ttk.Frame(top)
-        btns.pack(side="left", padx=10)
-        ttk.Button(btns, text="Gastos", command=self._open_gastos).pack(side="left", padx=4)
-        ttk.Button(btns, text="Propinas", command=self._open_propinas).pack(side="left", padx=4)
-        ttk.Button(btns, text="Corte", command=self._open_corte).pack(side="left", padx=4)
-        ttk.Button(btns, text="Reportes", command=self._open_reportes).pack(side="left", padx=4)
+        btns.pack(side="left", padx=14)
+        ttk.Button(btns, text="Gastos", style="Header.TButton", width=10, command=self._open_gastos).pack(side="left", padx=4)
+        ttk.Button(btns, text="Propinas", style="Header.TButton", width=10, command=self._open_propinas).pack(side="left", padx=4)
+        ttk.Button(btns, text="Corte", style="Header.TButton", width=10, command=self._open_corte).pack(side="left", padx=4)
+        ttk.Button(btns, text="Reportes", style="Header.TButton", width=10, command=self._open_reportes).pack(side="left", padx=4)
 
-        ttk.Label(top, text="Mesero:").pack(side="right")
+        right_header = ttk.Frame(top)
+        right_header.pack(side="right")
+        ttk.Label(right_header, text="Mesero:").pack(side="left", padx=(0, 6))
         self.mesero_var = tk.StringVar()
-        ttk.Entry(top, textvariable=self.mesero_var, width=20).pack(side="right", padx=(0, 10))
+        ttk.Entry(right_header, textvariable=self.mesero_var, width=20).pack(side="left")
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x")
 
         # Main split
         main = ttk.Frame(self, padding=10)
@@ -316,6 +332,24 @@ class POSApp(tk.Tk):
 
     def _open_reportes(self):
         ReportesView(self, self.db)
+
+    def _load_logo(self) -> tk.PhotoImage | None:
+        base = os.path.join(os.path.dirname(__file__), "assets")
+        candidates = ("logo_barbacoa.png", "file.png", "logo.png")
+        for name in candidates:
+            path = os.path.join(base, name)
+            if not os.path.exists(path):
+                continue
+            try:
+                img = tk.PhotoImage(file=path)
+                max_px = 48
+                if img.width() > max_px:
+                    factor = max(1, img.width() // max_px)
+                    img = img.subsample(factor, factor)
+                return img
+            except Exception:
+                return None
+        return None
 
 
 if __name__ == "__main__":
