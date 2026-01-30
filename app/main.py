@@ -1,3 +1,6 @@
+import json
+import os
+from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
@@ -41,11 +44,14 @@ class POSApp(tk.Tk):
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.comandas = []
         self.active_comanda = None
+        self._comandas_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "comandas_abiertas.json"))
 
         self._build_ui()
         self.after(100, lambda: self.mesero_entry.focus_set())
-        self._new_comanda()
+        self._load_comandas()
         self._refresh_catalog()
+        self._bind_shortcuts()
+        self._tick_clock()
 
     # ---------------- UI ----------------
     def _build_ui(self):
@@ -83,6 +89,9 @@ class POSApp(tk.Tk):
         self.mesa_entry.pack(anchor="e", pady=(2, 0))
         self.mesa_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
 
+        self.clock_var = tk.StringVar()
+        tk.Label(right_top, textvariable=self.clock_var, fg="#e5e7eb", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e", pady=(6, 0))
+
         # Main split
         main = ttk.Frame(self, padding=10)
         main.pack(fill="both", expand=True)
@@ -113,6 +122,18 @@ class POSApp(tk.Tk):
         cmd_btns = ttk.Frame(left)
         cmd_btns.pack(fill="x", pady=(0, 12))
         ttk.Button(cmd_btns, text="Nueva comanda", command=self._new_comanda).pack(side="left", padx=4)
+        ttk.Button(cmd_btns, text="Cerrar comanda", command=self._close_comanda).pack(side="left", padx=4)
+
+        atajos_box = tk.Frame(left, bg="#f3f4f6")
+        atajos_box.pack(fill="x", pady=(0, 8))
+        tk.Label(atajos_box, text="Atajos", font=("Arial", 11, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+        atajos_txt = (
+            "Ctrl+S Guardar  |  Ctrl+N Nueva\n"
+            "Ctrl+F Buscar   |  Ctrl+M Mesero\n"
+            "Ctrl+D Eliminar |  Ctrl+L Vaciar\n"
+            "Enter agrega / guarda"
+        )
+        tk.Label(atajos_box, text=atajos_txt, font=("Arial", 9), fg="#374151", bg="#f3f4f6", justify="left").pack(anchor="w", padx=6, pady=(0, 6))
 
         cat_box = tk.Frame(left, bg="#f3f4f6")
         cat_box.pack(fill="x", pady=(0, 4))
@@ -184,6 +205,7 @@ class POSApp(tk.Tk):
         self.tree.bind("<plus>", lambda _e: self._inc_selected())
         self.tree.bind("<minus>", lambda _e: self._dec_selected())
         self.tree.bind("<Button-1>", self._on_tree_click)
+        self.tree.bind("<Double-Button-1>", self._on_tree_double_click)
 
         btns = ttk.Frame(right)
         btns.pack(fill="x")
@@ -238,6 +260,19 @@ class POSApp(tk.Tk):
         ttk.Button(right, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda).pack(fill="x", pady=10)
 
     # ---------------- Logic ----------------
+    def _bind_shortcuts(self):
+        # Atajos globales para flujo rápido
+        self.bind_all("<Control-s>", lambda _e: self._save_comanda())
+        self.bind_all("<Control-n>", lambda _e: self._new_comanda())
+        self.bind_all("<Control-f>", lambda _e: self.search_entry.focus_set())
+        self.bind_all("<Control-m>", lambda _e: self.mesero_entry.focus_set())
+        self.bind_all("<Control-d>", lambda _e: self._remove_selected())
+        self.bind_all("<Control-l>", lambda _e: self._clear_all())
+
+    def _tick_clock(self):
+        self.clock_var.set(datetime.now().strftime("%H:%M:%S"))
+        self.after(1000, self._tick_clock)
+
     def _focus_catalog(self):
         if self.prod_list.size() > 0:
             if not self.prod_list.curselection():
@@ -247,6 +282,8 @@ class POSApp(tk.Tk):
 
     def _comanda_snapshot(self) -> dict:
         return {
+            "folio_local": self.comandas[self.active_comanda].get("folio_local") if self.active_comanda is not None else None,
+            "created_at": self.comandas[self.active_comanda].get("created_at") if self.active_comanda is not None else None,
             "mesero": self.mesero_var.get().strip(),
             "mesa": self.mesa_var.get().strip(),
             "metodo": self.metodo_var.get(),
@@ -270,11 +307,14 @@ class POSApp(tk.Tk):
             return
         self.comandas[self.active_comanda] = self._comanda_snapshot()
         self._update_comandas_list()
+        self._persist_comandas()
 
     def _new_comanda(self):
         if self.active_comanda is not None:
             self._save_current_to_state()
         self.comandas.append({
+            "folio_local": f"TMP-{datetime.now().strftime('%H%M%S')}",
+            "created_at": datetime.now().isoformat(timespec="seconds"),
             "mesero": "",
             "mesa": "",
             "metodo": "EFECTIVO",
@@ -285,6 +325,7 @@ class POSApp(tk.Tk):
         self.active_comanda = len(self.comandas) - 1
         self._apply_snapshot(self.comandas[self.active_comanda])
         self._update_comandas_list()
+        self._persist_comandas()
 
     def _on_select_comanda(self):
         sel = self.comandas_list.curselection()
@@ -296,6 +337,7 @@ class POSApp(tk.Tk):
         self._save_current_to_state()
         self.active_comanda = idx
         self._apply_snapshot(self.comandas[idx])
+        self._persist_comandas()
 
     def _update_comandas_list(self):
         self.comandas_list.delete(0, tk.END)
@@ -303,8 +345,9 @@ class POSApp(tk.Tk):
             total = calcular_total(c.get("items", [])) if c.get("items") else 0.0
             mesero = c.get("mesero") or "Sin mesero"
             mesa = c.get("mesa") or "-"
+            folio = c.get("folio_local") or f"{i+1}"
             marker = "*" if i == self.active_comanda else " "
-            label = f"{marker} {i+1}. Mesa {mesa} - {mesero} - ${total:.2f}"
+            label = f"{marker} {folio} | Mesa {mesa} - {mesero} - ${total:.2f}"
             self.comandas_list.insert(tk.END, label)
             bg = "#ffffff" if i % 2 == 0 else "#f3f4f6"
             self.comandas_list.itemconfig(i, bg=bg)
@@ -312,6 +355,53 @@ class POSApp(tk.Tk):
             self.comandas_list.selection_clear(0, tk.END)
             self.comandas_list.selection_set(self.active_comanda)
             self.comandas_list.activate(self.active_comanda)
+
+    def _close_comanda(self):
+        if self.active_comanda is None:
+            return
+        if not messagebox.askyesno("Cerrar comanda", "¿Descartar esta comanda sin guardar?"):
+            return
+        self.comandas.pop(self.active_comanda)
+        if self.comandas:
+            self.active_comanda = min(self.active_comanda, len(self.comandas) - 1)
+            self._apply_snapshot(self.comandas[self.active_comanda])
+        else:
+            self.active_comanda = None
+            self.items = []
+            self._refresh_ticket()
+            self._new_comanda()
+        self._persist_comandas()
+
+    def _persist_comandas(self):
+        data = {
+            "active_index": self.active_comanda,
+            "comandas": self.comandas,
+        }
+        try:
+            os.makedirs(os.path.dirname(self._comandas_path), exist_ok=True)
+            with open(self._comandas_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def _load_comandas(self):
+        try:
+            with open(self._comandas_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.comandas = data.get("comandas") or []
+            self.active_comanda = data.get("active_index")
+        except Exception:
+            self.comandas = []
+            self.active_comanda = None
+
+        if not self.comandas:
+            self._new_comanda()
+            return
+
+        if self.active_comanda is None or not (0 <= self.active_comanda < len(self.comandas)):
+            self.active_comanda = 0
+        self._apply_snapshot(self.comandas[self.active_comanda])
+        self._update_comandas_list()
 
     def _refresh_catalog(self):
         q = self.search_var.get().strip().lower()
@@ -437,6 +527,47 @@ class POSApp(tk.Tk):
         elif col == "#3":
             self._inc_selected()
 
+    def _on_tree_double_click(self, event):
+        row_id = self.tree.identify_row(event.y)
+        if not row_id:
+            return
+        col = self.tree.identify_column(event.x)
+        # Solo editar cantidad (columna Cant = #2)
+        if col != "#2":
+            return
+        idx = int(row_id)
+        if not (0 <= idx < len(self.items)):
+            return
+        it = self.items[idx]
+
+        editor = ttk.Entry(self.tree)
+        editor.insert(0, str(it.get("cantidad", "")))
+        editor.select_range(0, tk.END)
+        editor.focus_set()
+
+        def _commit(_e=None):
+            try:
+                qty = int(editor.get().strip())
+                if qty <= 0:
+                    raise ValueError
+            except Exception:
+                editor.destroy()
+                return
+            it["cantidad"] = qty
+            it["subtotal"] = calcular_subtotal(it["precio_unitario"], it["cantidad"])
+            editor.destroy()
+            self._refresh_ticket()
+            self._save_current_to_state()
+
+        def _cancel(_e=None):
+            editor.destroy()
+
+        editor.bind("<Return>", _commit)
+        editor.bind("<Escape>", _cancel)
+        editor.bind("<FocusOut>", _commit)
+
+        x, y, w, h = self.tree.bbox(row_id, col)
+        editor.place(x=x, y=y, width=w, height=h)
     def _toggle_cash_fields(self):
         if self.metodo_var.get() == "EFECTIVO":
             self.cash_frame.pack(fill="x", pady=(6, 0))
@@ -518,6 +649,7 @@ class POSApp(tk.Tk):
                     self.active_comanda = None
                     self.items = []
                     self._refresh_ticket()
+            self._persist_comandas()
             self._new_comanda()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo guardar en Supabase:\n{e}")
