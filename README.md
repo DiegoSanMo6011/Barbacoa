@@ -151,6 +151,39 @@ python app/main.py
 - Reportes
 - Instalación en Raspberry Pi
 
+Nota: el módulo de Reportes exporta CSV en la carpeta `exports/` (se crea automáticamente al exportar).
+
+---
+
+## ✅ Checklist de pruebas manuales (día real simulado)
+
+1) Comandas
+- Crear 10–15 comandas con mezcla EFECTIVO/TARJETA/TRANSFER.
+- Verificar cambio correcto en EFECTIVO.
+- Agregar propina en 2–3 comandas.
+
+2) Gastos
+- Registrar 3–5 gastos con categorías distintas.
+- Verificar que aparezcan en “Gastos del día”.
+
+3) Propinas
+- Registrar 2 propinas manuales además de las de comandas.
+- Verificar que se guarden sin error.
+
+4) Corte
+- Abrir Corte y verificar ventas por método, gastos y propinas.
+- Ingresar efectivo contado y verificar diferencia.
+- Guardar el corte y reabrir para confirmar que carga.
+
+5) Reportes
+- Abrir Reportes con rango de 7 días.
+- Verificar top productos y ventas por día.
+- Exportar CSV y revisar carpeta `exports/`.
+
+6) Gráficas
+- Abrir Gráficas y revisar que salgan las 3 secciones.
+- Repetir con otro rango de fechas.
+
 ---
 
 ## 👥 Organización del equipo
@@ -222,4 +255,3 @@ La prioridad del proyecto es:
 Primero que funcione bien en el negocio, luego se optimiza.
 
 ---
-

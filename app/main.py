@@ -5,7 +5,8 @@ from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
-from ui.cierre_dialog import CierreDialog
+from ui.corte_view import CorteView
+from ui.reportes_view import ReportesView
 
 
 class POSApp(tk.Tk):
@@ -44,7 +45,8 @@ class POSApp(tk.Tk):
         btns.pack(side="left", padx=10)
         ttk.Button(btns, text="Gastos", command=self._open_gastos).pack(side="left", padx=4)
         ttk.Button(btns, text="Propinas", command=self._open_propinas).pack(side="left", padx=4)
-        ttk.Button(btns, text="Cierre", command=self._open_cierre).pack(side="left", padx=4)
+        ttk.Button(btns, text="Corte", command=self._open_corte).pack(side="left", padx=4)
+        ttk.Button(btns, text="Reportes", command=self._open_reportes).pack(side="left", padx=4)
 
         ttk.Label(top, text="Mesero:").pack(side="right")
         self.mesero_var = tk.StringVar()
@@ -309,8 +311,11 @@ class POSApp(tk.Tk):
     def _open_propinas(self):
         PropinasDialog(self, self.db)
 
-    def _open_cierre(self):
-        CierreDialog(self, self.db)
+    def _open_corte(self):
+        CorteView(self, self.db)
+
+    def _open_reportes(self):
+        ReportesView(self, self.db)
 
 
 if __name__ == "__main__":

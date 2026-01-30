@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import re
 from typing import Iterable
 
 from .supabase_service import SupabaseService
@@ -12,8 +13,13 @@ def _get_db(db: SupabaseService | None) -> SupabaseService:
 
 def _parse_iso(dt_str: str) -> datetime:
     # Supabase puede devolver timestamps con sufijo Z
+    if not dt_str:
+        raise ValueError("timestamp vacío")
+    dt_str = dt_str.strip()
     if dt_str.endswith("Z"):
         dt_str = dt_str.replace("Z", "+00:00")
+    dt_str = re.sub(r"([+-])0\s+0:00$", r"\g<1>00:00", dt_str)
+    dt_str = re.sub(r"([+-]\d{2})\s?(\d{2})$", r"\1:\2", dt_str)
     return datetime.fromisoformat(dt_str)
 
 
