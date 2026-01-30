@@ -36,9 +36,9 @@ class CierreDialog(ctk.CTkToplevel):
         self._check_cierre()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
-        ctk.CTkLabel(header, text="CIERRE DE CAJA", font=("Arial", 18, "bold"), text_color="#111827").pack(pady=15)
+        ctk.CTkLabel(header, text="CIERRE DE CAJA", font=("Arial", 18, "bold"), text_color="white").pack(pady=15)
 
         top_bar = ctk.CTkFrame(self)
         top_bar.pack(fill="x", padx=12, pady=(12, 8))

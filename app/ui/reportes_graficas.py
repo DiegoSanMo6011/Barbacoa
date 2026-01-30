@@ -30,10 +30,10 @@ class ReportesGraficas(ctk.CTkToplevel):
         self._build_ui()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self)
-        header.pack(fill="x", padx=12, pady=12)
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
         title = f"Gráficas {self.fecha_inicio.isoformat()} a {self.fecha_fin.isoformat()}"
-        ctk.CTkLabel(header, text=title, font=("Arial", 16, "bold")).pack(side="left", padx=6)
+        ctk.CTkLabel(header, text=title, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=12, pady=12)
 
         grid = ctk.CTkFrame(self)
         grid.pack(fill="both", expand=True, padx=12, pady=(0, 12))

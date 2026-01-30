@@ -46,12 +46,12 @@ class CorteView(ctk.CTkToplevel):
         self._refresh()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
         self.logo_img = load_logo(28)
         if self.logo_img:
             ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="CORTE DEL DÍA", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=(6, 12), pady=12)
+        ctk.CTkLabel(header, text="CORTE DEL DÍA", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
         top_bar = ctk.CTkFrame(self)
         top_bar.pack(fill="x", padx=12, pady=(12, 8))

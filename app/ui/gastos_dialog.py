@@ -35,12 +35,12 @@ class GastosDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         # 1. TÍTULO CON ESTILO
-        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
         self.logo_img = load_logo(28)
         if self.logo_img:
             ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=(6, 12), pady=12)
+        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
         # 2. FRAME DEL FORMULARIO
         form_frame = ctk.CTkFrame(self)

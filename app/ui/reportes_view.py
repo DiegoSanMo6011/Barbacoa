@@ -45,13 +45,13 @@ class ReportesView(ctk.CTkToplevel):
         self._load_reportes()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self, fg_color="#f3f4f6", height=60, corner_radius=0)
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
 
         self.logo_img = load_logo(28)
         if self.logo_img:
             ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(12, 8), pady=10)
-        ctk.CTkLabel(header, text="REPORTES", font=("Arial", 18, "bold"), text_color="#111827").pack(side="left", padx=6, pady=10)
+        ctk.CTkLabel(header, text="REPORTES", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=6, pady=10)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
         date_row.pack(side="right", padx=12)

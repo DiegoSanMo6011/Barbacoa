@@ -12,7 +12,11 @@ class QuantityDialog(ctk.CTkToplevel):
 
         self.result = None
 
-        ctk.CTkLabel(self, text=f"Cantidad para:", font=("Arial", 14, "bold")).pack(pady=(12, 2))
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=48, corner_radius=0)
+        header.pack(fill="x", side="top")
+        ctk.CTkLabel(header, text="CANTIDAD", font=("Arial", 14, "bold"), text_color="white").pack(pady=10)
+
+        ctk.CTkLabel(self, text="Cantidad para:", font=("Arial", 14, "bold")).pack(pady=(12, 2))
         ctk.CTkLabel(self, text=product_name).pack(pady=(0, 10))
 
         self.qty_var = ctk.StringVar(value="1")
