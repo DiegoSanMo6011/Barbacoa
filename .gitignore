@@ -7,3 +7,4 @@ __pycache__/
 app/data/comandas_abiertas.json
 app/data/offline.db
 app/data/backups/
+data/
