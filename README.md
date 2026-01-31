@@ -1,257 +1,106 @@
+# AutoNoma POS
 
-# Barbacoa POS System 🍖
+Sistema de Punto de Venta (POS) para operación real en restaurante, con enfoque en velocidad de captura, confiabilidad offline y administración centralizada. Ejecuta en Raspberry Pi con backend en Supabase.
 
-Sistema de Punto de Venta (POS) diseñado para la digitalización de comandas, control de gastos, propinas y cierre de caja en restaurantes de barbacoa.
+## Visión
 
-El objetivo del proyecto es construir un sistema funcional, escalable y listo para operación real en hardware de bajo costo (Raspberry Pi), con backend en Supabase.
+- Captura rápida de comandas con atajos y edición inline.
+- Operación continua con modo offline y sincronización automática.
+- Módulos administrativos: gastos, propinas, corte y reportes.
+- Catálogo de productos y personal editable desde la UI.
 
----
+## Arquitectura
 
-## 🧠 Visión del sistema
+**Frontend local**
+- Python + Tkinter/ttk + CustomTkinter.
+- UI full-screen, optimizada para caja.
 
-Este POS busca cubrir las necesidades reales del negocio:
+**Backend**
+- Supabase (PostgreSQL + API REST).
+- Esquema en `sql/schema.sql`.
 
-- Registro digital de comandas.
-- Control de ventas por método de pago.
-- Registro de gastos operativos.
-- Control de propinas por mesero.
-- Cierre de caja diario.
-- Reportes y análisis de datos.
-- Arquitectura preparada para escalabilidad.
+**Modo offline**
+- Cola local en SQLite.
+- Reintentos automáticos cada 30s.
+- Backups diarios en JSON.
 
----
-
-## 🏗️ Arquitectura general
-
-**Frontend (local):**
-- Python + Tkinter/ttk (UI)
-- Ejecutable en PC o Raspberry Pi
-
-**Backend (cloud):**
-- Supabase (PostgreSQL + API REST)
-
-**Control de versiones:**
-- Git + GitHub
-
-**Flujo básico:**
-
-POS → Supabase → Reportes / Análisis
-
----
-
-## 📂 Estructura del proyecto
+## Estructura del proyecto
 
 ```
-Barbacoa/
-│
-├── app/
-│   ├── main.py              # App principal POS
-│   ├── ui/                   # Interfaces (comandas, gastos, cierre, etc.)
-│   ├── services/             # Conexión Supabase y lógica backend
-│   ├── domain/               # Lógica de negocio (cálculos, modelos)
-│
-├── sql/
-│   ├── schema.sql            # Esquema de base de datos Supabase
-│
-├── scripts/
-│   ├── install_pi.sh         # Instalación en Raspberry Pi (futuro)
-│   ├── update_pi.sh          # Actualización del sistema (futuro)
-│
-├── .env.example              # Variables de entorno de ejemplo
-├── requirements.txt          # Dependencias Python
-├── README.md                 # Documentación del proyecto
-└── .gitignore
+app/
+  main.py                 # App principal (comandas)
+  services/               # Supabase + offline
+  ui/                     # Dialogs y vistas
+  domain/                 # Cálculos
+  assets/                 # Branding
+sql/
+  schema.sql              # Esquema de DB
+scripts/
+  update_pi.sh            # Update + restart
+  run_pos.sh              # Autostart local
 ```
 
----
+## Configuración
 
-## 🗄️ Modelo de base de datos (Supabase)
-
-Tablas principales:
-
-- `productos` → catálogo de productos
-- `comandas` → ventas
-- `comanda_items` → productos por comanda
-- `gastos` → gastos operativos
-- `propinas` → propinas por mesero
-- `cierres_caja` → cierre diario
-- `meseros` → personal
-
-El esquema completo se encuentra en:
-
-```
-sql/schema.sql
-```
-
----
-
-## ⚙️ Configuración del proyecto
-
-### 1) Clonar repositorio
-
-```bash
-git clone git@github.com:DiegoSanMo6011/Barbacoa.git
-cd Barbacoa
-```
-
-### 2) Crear entorno virtual
-
+1) Crear entorno virtual
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3) Instalar dependencias
-
+2) Instalar dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4) Configurar variables de entorno
-
-Copia el archivo de ejemplo:
-
+3) Variables de entorno
 ```bash
 cp .env.example .env
 ```
-
-Edita `.env` y agrega las credenciales de Supabase:
-
+Editar `.env` con credenciales Supabase:
 ```env
-SUPABASE_URL=https://rwbzbaenzfqnstxsuxrl.supabase.co
-SUPABASE_ANON_KEY=TU_ANON_KEY_AQUI
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
 ```
 
-⚠️ Nunca subas `.env` al repositorio.
-
----
-
-### 5) Ejecutar el POS
-
+4) Ejecutar
 ```bash
 python app/main.py
 ```
 
----
+## Branding (AutoNoma)
 
-## 🧩 Módulos del sistema
+Logo en `app/assets/`:
+- `logo_autonoma_256.png` o `logo_autonoma.png`
+- SVG opcional: `logo_autonoma.svg` (Tkinter no renderiza SVG directo)
 
-### ✅ Implementado (MVP)
+## Módulos principales
 
-- Comandas
-- Métodos de pago
-- Cálculo de totales y cambio
-- Persistencia en Supabase
+- Comandas: multi‑comanda, edición rápida, atajos.
+- Gastos: registro y consulta diaria.
+- Propinas: registro y reporte mensual.
+- Corte: resumen diario con efectivo teórico.
+- Reportes: top productos, ventas por día, CSV.
+- Personal: alta/baja de meseros.
+- Productos: alta/edición de catálogo.
 
-### 🚧 En desarrollo
+## Modo offline (técnico)
 
-- Gastos
-- Propinas
-- Cierre de caja
-- Reportes
-- Instalación en Raspberry Pi
+- SQLite local: `app/data/offline.db`
+- Cola de operaciones: comandas, gastos, propinas, cierres.
+- Sync cada 30s en `app/main.py` (`_sync_loop`).
+- Backups diarios: `app/data/backups/offline_YYYY-MM-DD.json`
 
-Nota: el módulo de Reportes exporta CSV en la carpeta `exports/` (se crea automáticamente al exportar).
+## Raspberry Pi (deploy)
 
----
-
-## ✅ Checklist de pruebas manuales (día real simulado)
-
-1) Comandas
-- Crear 10–15 comandas con mezcla EFECTIVO/TARJETA/TRANSFER.
-- Verificar cambio correcto en EFECTIVO.
-- Agregar propina en 2–3 comandas.
-
-2) Gastos
-- Registrar 3–5 gastos con categorías distintas.
-- Verificar que aparezcan en “Gastos del día”.
-
-3) Propinas
-- Registrar 2 propinas manuales además de las de comandas.
-- Verificar que se guarden sin error.
-
-4) Corte
-- Abrir Corte y verificar ventas por método, gastos y propinas.
-- Ingresar efectivo contado y verificar diferencia.
-- Guardar el corte y reabrir para confirmar que carga.
-
-5) Reportes
-- Abrir Reportes con rango de 7 días.
-- Verificar top productos y ventas por día.
-- Exportar CSV y revisar carpeta `exports/`.
-
-6) Gráficas
-- Abrir Gráficas y revisar que salgan las 3 secciones.
-- Repetir con otro rango de fechas.
-
----
-
-## 👥 Organización del equipo
-
-Cada módulo se desarrolla en ramas independientes:
-
-### Crear rama
-
+Actualizar y reiniciar:
 ```bash
-git checkout -b feature/nombre_modulo
+cd /home/adminbbq/barbacoa_pos
+git checkout main
+./scripts/update_pi.sh
 ```
 
-### Subir cambios
-
+Ejecutar manual:
 ```bash
-git add .
-git commit -m "feat: descripcion del modulo"
-git push -u origin feature/nombre_modulo
+./scripts/run_pos.sh
 ```
-
-Luego se crea un Pull Request hacia `main`.
-
----
-
-## 📌 Plan de desarrollo (corto plazo)
-
-Objetivo: sistema completo en 2–3 días.
-
-Módulos asignados:
-
-- Gastos → Crazyhand
-- Cierre de caja → ArturoProgamer777
-- Propinas, reportes e integración → Gera
-
----
-
-## 📊 Uso de datos demo
-
-Si falta información real del restaurante (categorías, productos, tipos de gasto, etc.), se deben usar datos de ejemplo claros.
-
-Cuando se requiera información real:
-- Notificar a Gera.
-- Gera se encarga de consultar al cliente.
-- Se actualiza el sistema.
-
----
-
-## 🚀 Roadmap futuro
-
-- Impresión de tickets
-- Roles de usuario (cajero / admin)
-- Dashboard web
-- Modo offline
-- Analítica avanzada
-- Empaquetado como ejecutable
-- Actualización remota en Raspberry Pi
-
----
-
-## 📎 Nota importante
-
-La prioridad del proyecto es:
-
-1. Funcionalidad real
-2. Estabilidad
-3. Simplicidad operativa
-4. Escalabilidad futura
-
-Primero que funcione bien en el negocio, luego se optimiza.
-
----

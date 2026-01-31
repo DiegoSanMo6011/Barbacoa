@@ -56,6 +56,7 @@ class POSApp(tk.Tk):
         self._refresh_catalog()
         self._bind_shortcuts()
         self._tick_clock()
+        self._sync_loop()
 
     # ---------------- UI ----------------
     def _build_ui(self):
@@ -280,6 +281,13 @@ class POSApp(tk.Tk):
         self.bind_all("<Control-l>", lambda _e: self._clear_all())
         self.bind_all("<Control-q>", lambda _e: self._exit_app())
 
+    def _sync_loop(self):
+        try:
+            self.db.sync_offline()
+            self.db.offline.daily_backup(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        except Exception:
+            pass
+        self.after(30000, self._sync_loop)
     def _exit_app(self):
         if messagebox.askyesno("Salir", "¿Cerrar el POS?"):
             self.destroy()
@@ -652,18 +660,11 @@ class POSApp(tk.Tk):
             cambio = recibido - total
 
         try:
-            comanda = self.db.crear_comanda(mesero, metodo, total, recibido, cambio)
-            self.db.agregar_items(comanda["id"], self.items)
-            if propina > 0:
-                snapshot = mesero if mesero.strip() else "(SIN MESERO)"
-                self.db.crear_propina(
-                    monto=propina,
-                    mesero_id=None,
-                    mesero_nombre_snapshot=snapshot,
-                    fuente="COMANDA",
-                    comanda_id=comanda["id"],
-                )
-            messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            result = self.db.guardar_comanda(mesero, metodo, total, recibido, cambio, self.items, propina)
+            if result.get("offline"):
+                messagebox.showinfo("OK", f"Comanda guardada localmente.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            else:
+                messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             # Cerrar comanda actual y abrir una nueva
             if self.active_comanda is not None:
                 self.comandas.pop(self.active_comanda)
