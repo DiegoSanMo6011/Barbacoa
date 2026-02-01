@@ -69,8 +69,8 @@ class ComandaView(ctk.CTkFrame):
         # Buttons under table
         btns = ctk.CTkFrame(right)
         btns.pack(fill="x", padx=10, pady=(0, 6))
-        ctk.CTkButton(btns, text="❌ Eliminar seleccionado", command=self.remove_selected).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="🧹 Vaciar", command=self.clear_all).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="Eliminar seleccionado", command=self.remove_selected).pack(side="left", padx=6)
+        ctk.CTkButton(btns, text="Vaciar", command=self.clear_all).pack(side="left", padx=6)
 
         # Payment section
         pay = ctk.CTkFrame(right)
@@ -102,7 +102,7 @@ class ComandaView(ctk.CTkFrame):
         self.cambio_label.grid(row=0, column=3, padx=6, pady=6, sticky="w")
 
         # Save button
-        self.save_btn = ctk.CTkButton(right, text="✅ GUARDAR COMANDA", height=42, command=self.save_comanda)
+        self.save_btn = ctk.CTkButton(right, text="GUARDAR COMANDA", height=42, command=self.save_comanda)
         self.save_btn.pack(fill="x", padx=10, pady=(6, 12))
 
         self._toggle_cash_fields()
@@ -242,7 +242,7 @@ class ComandaView(ctk.CTkFrame):
         try:
             comanda = self.db.crear_comanda(mesero, metodo, total, recibido, cambio)
             self.db.agregar_items(comanda["id"], self.items)
-            messagebox.showinfo("OK", f"✅ Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             self.clear_all()
             self.mesero_var.set("")
             self.recibido_var.set("")

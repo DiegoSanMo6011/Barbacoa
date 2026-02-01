@@ -1,15 +1,69 @@
 from datetime import date, datetime, time, timezone
+import os
 from supabase import create_client
 from .settings import SUPABASE_URL, SUPABASE_KEY
+from .offline_store import OfflineStore
 
 
 class SupabaseService:
     def __init__(self):
         self.client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        self.offline = OfflineStore(base_dir)
 
     def get_productos(self):
         res = self.client.table("productos").select("*").eq("activo", True).order("categoria").execute()
         return res.data or []
+
+    def listar_productos(self) -> list[dict]:
+        res = self.client.table("productos").select("*").order("categoria").execute()
+        return res.data or []
+
+    def crear_producto(self, nombre: str, categoria: str, precio: float, activo: bool = True) -> dict:
+        if not nombre or not nombre.strip():
+            raise ValueError("nombre es obligatorio")
+        if not categoria or not categoria.strip():
+            raise ValueError("categoria es obligatoria")
+        if precio is None or float(precio) < 0:
+            raise ValueError("precio debe ser >= 0")
+        data = {
+            "nombre": nombre.strip(),
+            "categoria": categoria.strip(),
+            "precio": round(float(precio), 2),
+            "activo": bool(activo),
+        }
+        res = self.client.table("productos").insert(data).execute()
+        return res.data[0]
+
+    def actualizar_producto(
+        self,
+        producto_id: int,
+        nombre: str | None = None,
+        categoria: str | None = None,
+        precio: float | None = None,
+        activo: bool | None = None,
+    ) -> dict:
+        if producto_id is None:
+            raise ValueError("producto_id es obligatorio")
+        data: dict = {}
+        if nombre is not None:
+            if not nombre.strip():
+                raise ValueError("nombre es obligatorio")
+            data["nombre"] = nombre.strip()
+        if categoria is not None:
+            if not categoria.strip():
+                raise ValueError("categoria es obligatoria")
+            data["categoria"] = categoria.strip()
+        if precio is not None:
+            if float(precio) < 0:
+                raise ValueError("precio debe ser >= 0")
+            data["precio"] = round(float(precio), 2)
+        if activo is not None:
+            data["activo"] = bool(activo)
+        if not data:
+            raise ValueError("no hay cambios para actualizar")
+        res = self.client.table("productos").update(data).eq("id", producto_id).execute()
+        return res.data[0]
 
     def crear_comanda(self, mesero: str, metodo_pago: str, total: float, recibido: float | None, cambio: float | None):
         data = {
@@ -22,6 +76,41 @@ class SupabaseService:
         }
         res = self.client.table("comandas").insert(data).execute()
         return res.data[0]
+
+    def guardar_comanda(
+        self,
+        mesero: str,
+        metodo_pago: str,
+        total: float,
+        recibido: float | None,
+        cambio: float | None,
+        items: list[dict],
+        propina: float | None = None,
+    ) -> dict:
+        payload = {
+            "mesero": mesero,
+            "metodo_pago": metodo_pago,
+            "total": total,
+            "recibido": recibido,
+            "cambio": cambio,
+            "items": items,
+            "propina": propina,
+        }
+        try:
+            comanda = self.crear_comanda(mesero, metodo_pago, total, recibido, cambio)
+            self.agregar_items(comanda["id"], items)
+            if propina and propina > 0:
+                self.crear_propina(
+                    monto=propina,
+                    mesero_id=None,
+                    mesero_nombre_snapshot=mesero or "Sin nombre",
+                    fuente="COMANDA",
+                    comanda_id=comanda["id"],
+                )
+            return comanda
+        except Exception:
+            self.offline.enqueue("comanda", payload)
+            return {"offline": True}
 
     def agregar_items(self, comanda_id: str, items: list[dict]):
         # items: {producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal}
@@ -37,12 +126,14 @@ class SupabaseService:
             })
         self.client.table("comanda_items").insert(payload).execute()
 
-    # ---------------- Gastos ----------------
-    def crear_gasto(self, concepto: str, categoria: str, monto: float, nota: str | None = None) -> dict:
+   # ---------------- Gastos ----------------
+    def crear_gasto(self, concepto: str, categoria: str, monto: float, nota: str | None = None, metodo_pago: str = "EFECTIVO") -> dict:
         if not concepto or not concepto.strip():
             raise ValueError("concepto es obligatorio")
         if not categoria or not categoria.strip():
             raise ValueError("categoria es obligatoria")
+        if not metodo_pago or not metodo_pago.strip(): 
+            raise ValueError("metodo_pago es obligatorio")
         if monto is None or float(monto) <= 0:
             raise ValueError("monto debe ser > 0")
 
@@ -51,8 +142,55 @@ class SupabaseService:
             "categoria": categoria.strip(),
             "monto": round(float(monto), 2),
             "nota": nota.strip() if isinstance(nota, str) and nota.strip() else None,
+            "metodo_pago": metodo_pago.strip() # faltaba el metodo de pago
         }
-        res = self.client.table("gastos").insert(data).execute()
+        try:
+            res = self.client.table("gastos").insert(data).execute()
+            return res.data[0]
+        except Exception:
+            self.offline.enqueue("gasto", data)
+            return {"offline": True}
+
+    # ---------------- Meseros ----------------
+    def listar_meseros_activos(self) -> list[dict]:
+        res = (
+            self.client.table("meseros")
+            .select("id, nombre, activo")
+            .eq("activo", True)
+            .order("nombre")
+            .execute()
+        )
+        return res.data or []
+
+    def listar_meseros(self) -> list[dict]:
+        res = (
+            self.client.table("meseros")
+            .select("id, nombre, activo")
+            .order("nombre")
+            .execute()
+        )
+        return res.data or []
+
+    def crear_mesero(self, nombre: str) -> dict:
+        if not nombre or not nombre.strip():
+            raise ValueError("nombre es obligatorio")
+        data = {"nombre": nombre.strip(), "activo": True}
+        res = self.client.table("meseros").insert(data).execute()
+        return res.data[0]
+
+    def actualizar_mesero(self, mesero_id: str, nombre: str | None = None, activo: bool | None = None) -> dict:
+        if not mesero_id:
+            raise ValueError("mesero_id es obligatorio")
+        data: dict = {}
+        if nombre is not None:
+            if not nombre.strip():
+                raise ValueError("nombre es obligatorio")
+            data["nombre"] = nombre.strip()
+        if activo is not None:
+            data["activo"] = bool(activo)
+        if not data:
+            raise ValueError("no hay cambios para actualizar")
+        res = self.client.table("meseros").update(data).eq("id", mesero_id).execute()
         return res.data[0]
 
     def listar_gastos_dia(self, fecha: date) -> list[dict]:
@@ -91,8 +229,12 @@ class SupabaseService:
             "fuente": fuente.strip(),
             "comanda_id": comanda_id,
         }
-        res = self.client.table("propinas").insert(data).execute()
-        return res.data[0]
+        try:
+            res = self.client.table("propinas").insert(data).execute()
+            return res.data[0]
+        except Exception:
+            self.offline.enqueue("propina", data)
+            return {"offline": True}
 
     def listar_propinas_rango(self, desde: datetime, hasta: datetime) -> list[dict]:
         if not isinstance(desde, datetime) or not isinstance(hasta, datetime):
@@ -195,8 +337,50 @@ class SupabaseService:
             "diferencia_efectivo": round(float(diferencia_efectivo), 2),
             "notas": notas.strip() if isinstance(notas, str) and notas.strip() else None,
         }
-        res = self.client.table("cierres_caja").insert(data).execute()
-        return res.data[0]
+        try:
+            res = self.client.table("cierres_caja").insert(data).execute()
+            return res.data[0]
+        except Exception:
+            self.offline.enqueue("cierre", data)
+            return {"offline": True}
+
+    def sync_offline(self) -> int:
+        ops = self.offline.list_ops()
+        synced = 0
+        for op in ops:
+            try:
+                if op["op"] == "gasto":
+                    self.client.table("gastos").insert(op["payload"]).execute()
+                elif op["op"] == "propina":
+                    self.client.table("propinas").insert(op["payload"]).execute()
+                elif op["op"] == "cierre":
+                    self.client.table("cierres_caja").insert(op["payload"]).execute()
+                elif op["op"] == "comanda":
+                    p = op["payload"]
+                    comanda = self.crear_comanda(
+                        p["mesero"],
+                        p["metodo_pago"],
+                        p["total"],
+                        p.get("recibido"),
+                        p.get("cambio"),
+                    )
+                    self.agregar_items(comanda["id"], p.get("items") or [])
+                    if p.get("propina"):
+                        self.crear_propina(
+                            monto=float(p.get("propina") or 0),
+                            mesero_id=None,
+                            mesero_nombre_snapshot=p.get("mesero") or "Sin nombre",
+                            fuente="COMANDA",
+                            comanda_id=comanda["id"],
+                        )
+                else:
+                    continue
+                self.offline.delete_op(op["id"])
+                synced += 1
+            except Exception:
+                # Si falla, no borres y sigue
+                continue
+        return synced
 
     # ---------------- Helpers ----------------
     def _day_range(self, fecha: date) -> tuple[str, str]:

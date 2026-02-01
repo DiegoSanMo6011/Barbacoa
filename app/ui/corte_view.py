@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
-import os
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
 
 from domain.corte import calc_diferencia, calc_efectivo_teorico
+from ui.assets import load_logo
 from services.corte_service import (
     get_corte_por_fecha,
     get_gastos_total,
@@ -46,15 +46,19 @@ class CorteView(ctk.CTkToplevel):
         self._refresh()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self)
-        header.pack(fill="x", padx=12, pady=12)
-
-        self.logo_img = self._load_logo()
+        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
+        header.pack(fill="x", side="top")
+        self.logo_img = load_logo(40)
         if self.logo_img:
-            ctk.CTkLabel(header, image=self.logo_img, text="").pack(side="left", padx=(6, 8))
-        ctk.CTkLabel(header, text="Corte del día", font=("Arial", 16, "bold")).pack(side="left", padx=6)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
+        ctk.CTkLabel(header, text="CORTE DEL DÍA", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
-        date_row = ctk.CTkFrame(header, fg_color="transparent")
+        top_bar = ctk.CTkFrame(self)
+        top_bar.pack(fill="x", padx=12, pady=(12, 8))
+
+        ctk.CTkLabel(top_bar, text="Resumen del día", font=("Arial", 14, "bold")).pack(side="left", padx=6)
+
+        date_row = ctk.CTkFrame(top_bar, fg_color="transparent")
         date_row.pack(side="right")
         ctk.CTkLabel(date_row, text="Fecha (YYYY-MM-DD):").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_var, width=140).pack(side="left", padx=6)
