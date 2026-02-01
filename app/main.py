@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
+from domain.ticket import build_ticket_text
 from ui.assets import load_logo
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
@@ -14,6 +15,7 @@ from ui.corte_view import CorteView
 from ui.reportes_view import ReportesView
 from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
+from ui.ticket_preview import TicketPreview
 
 
 class POSApp(tk.Tk):
@@ -661,10 +663,12 @@ class POSApp(tk.Tk):
 
         try:
             result = self.db.guardar_comanda(mesero, metodo, total, recibido, cambio, self.items, propina)
+            ticket_path = self._create_ticket(result, mesero, metodo, total, propina)
             if result.get("offline"):
                 messagebox.showinfo("OK", f"Comanda guardada localmente.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             else:
                 messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+            self._show_ticket_preview(ticket_path)
             # Cerrar comanda actual y abrir una nueva
             if self.active_comanda is not None:
                 self.comandas.pop(self.active_comanda)
@@ -717,6 +721,40 @@ class POSApp(tk.Tk):
         self.mesero_menu.configure(values=values)
         if not current and values:
             self.mesero_var.set(values[0])
+
+    def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> str:
+        folio = comanda.get("folio")
+        ts = datetime.now()
+        if not folio:
+            folio = f"LOCAL-{ts.strftime('%Y%m%d%H%M%S')}"
+
+        payload = {
+            "negocio": "Barbacoa de Mirand",
+            "folio": folio,
+            "fecha_hora": ts,
+            "mesa": self.mesa_var.get().strip() if hasattr(self, "mesa_var") else "",
+            "mesero": mesero,
+            "metodo_pago": metodo,
+            "propina": propina or 0,
+            "total": total,
+            "items": list(self.items),
+        }
+        ticket_text = build_ticket_text(payload)
+
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "exports", "tickets"))
+        os.makedirs(base, exist_ok=True)
+        filename = os.path.join(base, f"ticket_{folio}.txt")
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(ticket_text)
+        return filename
+
+    def _show_ticket_preview(self, ticket_path: str):
+        try:
+            with open(ticket_path, "r", encoding="utf-8") as f:
+                text = f.read()
+        except Exception:
+            return
+        TicketPreview(self, text, ticket_path)
 
 
 if __name__ == "__main__":
