@@ -104,3 +104,61 @@ Ejecutar manual:
 ```bash
 ./scripts/run_pos.sh
 ```
+
+---
+
+## ✅ Checklist de pruebas manuales (día real simulado)
+
+1) Comandas
+- Crear 10–15 comandas con mezcla EFECTIVO/TARJETA/TRANSFER.
+- Verificar cambio correcto en EFECTIVO.
+- Agregar propina en 2–3 comandas.
+
+2) Gastos
+- Registrar 3–5 gastos con categorías distintas.
+- Verificar que aparezcan en “Gastos del día”.
+
+3) Propinas
+- Registrar 2 propinas manuales además de las de comandas.
+- Verificar que se guarden sin error.
+
+4) Corte
+- Abrir Corte y verificar ventas por método, gastos y propinas.
+- Ingresar efectivo contado y verificar diferencia.
+- Guardar el corte y reabrir para confirmar que carga.
+
+5) Reportes
+- Abrir Reportes con rango de 7 días.
+- Verificar top productos y ventas por día.
+- Exportar CSV y revisar carpeta `exports/`.
+
+6) Gráficas
+- Abrir Gráficas y revisar que salgan las 3 secciones.
+- Repetir con otro rango de fechas.
+
+---
+
+## 🧾 Ticket de venta (vista previa y archivo)
+
+Al guardar una comanda se genera un ticket con:
+- Nombre del negocio, folio, fecha/hora
+- Mesa, mesero, método de pago, propina y total
+- Lista de productos
+- Mensaje de agradecimiento
+
+El archivo se guarda en:
+```
+exports/tickets/
+```
+
+---
+
+## 🖥️ Lanzador de escritorio (portable)
+
+Para crear un acceso directo en el equipo:
+```bash
+bash scripts/install_desktop_shortcut.sh
+```
+
+Instala el launcher en el menú de aplicaciones y, si existe, en el Escritorio.  
+En algunos entornos puede requerir marcar el acceso como “Allow Launching”.
