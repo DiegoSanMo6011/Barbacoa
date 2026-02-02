@@ -142,7 +142,7 @@ class POSApp(tk.Tk):
         self.search_entry = ttk.Entry(left, textvariable=self.search_var, width=30)
         self.search_entry.pack(fill="x", pady=(6, 6))
         self.search_entry.bind("<KeyRelease>", lambda _e: self._refresh_catalog())
-        self.search_entry.bind("<Return>", lambda _e: self._focus_catalog())
+        self.search_entry.bind("<Return>", lambda _e: self._add_or_focus_catalog())
 
         cats = sorted({p.get("categoria", "GENERAL") for p in self.productos})
         self.cat_var = tk.StringVar(value="TODAS")
@@ -170,8 +170,10 @@ class POSApp(tk.Tk):
         qty_row.pack(fill="x", pady=8)
         ttk.Label(qty_row, text="Cantidad:").pack(side="left")
         self.qty_var = tk.StringVar(value="1")
+        ttk.Button(qty_row, text="-", width=3, command=lambda: self._bump_qty(-1)).pack(side="left", padx=(6, 2))
         self.qty_entry = ttk.Entry(qty_row, textvariable=self.qty_var, width=6)
-        self.qty_entry.pack(side="left", padx=6)
+        self.qty_entry.pack(side="left", padx=2)
+        ttk.Button(qty_row, text="+", width=3, command=lambda: self._bump_qty(1)).pack(side="left", padx=(2, 0))
         self.qty_entry.bind("<Return>", lambda _e: self._add_selected_product())
 
         ttk.Button(left, text="Agregar", command=self._add_selected_product).pack(fill="x")
@@ -203,6 +205,7 @@ class POSApp(tk.Tk):
         self.tree.bind("<Delete>", lambda _e: self._remove_selected())
         self.tree.bind("<plus>", lambda _e: self._inc_selected())
         self.tree.bind("<minus>", lambda _e: self._dec_selected())
+        self.tree.bind("<Up>", lambda _e: None)
         self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<Double-Button-1>", self._on_tree_double_click)
 
@@ -268,6 +271,9 @@ class POSApp(tk.Tk):
         self.bind_all("<Control-d>", lambda _e: self._remove_selected())
         self.bind_all("<Control-l>", lambda _e: self._clear_all())
         self.bind_all("<Control-q>", lambda _e: self._exit_app())
+        self.bind_all("<Control-Return>", lambda _e: self._save_comanda())
+        self.bind_all("<plus>", lambda _e: self._inc_selected())
+        self.bind_all("<minus>", lambda _e: self._dec_selected())
 
     def _sync_loop(self):
         try:
@@ -290,6 +296,15 @@ class POSApp(tk.Tk):
                 self.prod_list.selection_set(0)
             self.prod_list.activate(0)
         self.prod_list.focus_set()
+
+    def _add_or_focus_catalog(self):
+        if self.prod_list.size() == 0:
+            return
+        sel = self.prod_list.curselection()
+        if sel:
+            self._add_selected_product()
+        else:
+            self._focus_catalog()
 
     def _comanda_snapshot(self) -> dict:
         return {
@@ -449,6 +464,9 @@ class POSApp(tk.Tk):
             idx = self.prod_list.size() - 1
             bg = THEME["row_even"] if idx % 2 == 0 else THEME["row_odd"]
             self.prod_list.itemconfig(idx, bg=bg)
+        if self.filtered and not self.prod_list.curselection():
+            self.prod_list.selection_set(0)
+            self.prod_list.activate(0)
 
     def _add_selected_product(self):
         sel = self.prod_list.curselection()
@@ -476,6 +494,14 @@ class POSApp(tk.Tk):
         self._refresh_ticket()
         self._save_current_to_state()
 
+    def _bump_qty(self, delta: int):
+        try:
+            qty = int(self.qty_var.get().strip())
+        except Exception:
+            qty = 1
+        qty = max(1, qty + delta)
+        self.qty_var.set(str(qty))
+
     def _refresh_ticket(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
@@ -494,6 +520,10 @@ class POSApp(tk.Tk):
         self.total_var.set(f"${total:.2f}")
         self._update_change()
         self._update_comandas_list()
+        # Mantener selección visible
+        children = self.tree.get_children()
+        if children:
+            self.tree.selection_set(children[-1])
 
     def _remove_selected(self):
         sel = self.tree.selection()
