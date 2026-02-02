@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import date, timedelta, datetime
+import os
 import csv
 import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
 
 from ui.assets import load_logo
+from ui.theme import apply_ttk_style, build_header
 from services.reportes_service import (
     get_top_productos,
     get_ventas_por_dia,
@@ -25,6 +27,7 @@ class ReportesView(ctk.CTkToplevel):
         self.resizable(False, False)
         self.grab_set()
 
+        apply_ttk_style(self)
         self.db = supabase
         self._top_productos = []
         self._ventas_por_dia = []
@@ -45,13 +48,8 @@ class ReportesView(ctk.CTkToplevel):
         self._load_reportes()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
-        header.pack(fill="x", side="top")
-
         self.logo_img = load_logo(40)
-        if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 8), pady=10)
-        ctk.CTkLabel(header, text="REPORTES", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=6, pady=10)
+        build_header(self, "REPORTES", logo_img=self.logo_img)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
         date_row.pack(side="right", padx=12)

@@ -9,6 +9,7 @@ from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
 from domain.ticket import build_ticket_text
 from ui.assets import load_logo
+from ui.theme import THEME, FONTS, apply_ttk_style
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
 from ui.corte_view import CorteView
@@ -27,22 +28,7 @@ class POSApp(tk.Tk):
         self.attributes("-fullscreen", True)
         self.bind("<Escape>", lambda _e: self.attributes("-fullscreen", False))
 
-        # Estilo ttk (se ve pro)
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except Exception:
-            pass
-        style.configure("TButton", padding=8, font=("Arial", 10, "bold"))
-        style.configure("Accent.TButton", padding=10, font=("Arial", 11, "bold"), foreground="white", background="#1d4ed8")
-        style.map("Accent.TButton", background=[("active", "#1e40af")])
-        style.configure("Danger.TButton", padding=8, font=("Arial", 10, "bold"), foreground="white", background="#dc2626")
-        style.map("Danger.TButton", background=[("active", "#b91c1c")])
-        style.configure("Treeview.Heading", font=("Arial", 14, "bold"))
-        style.configure("Treeview", rowheight=44, font=("Arial", 14))
-        style.configure("Header.TLabel", font=("Arial", 18, "bold"))
-        style.configure("Section.TLabel", font=("Arial", 12, "bold"))
-        style.configure("Total.TLabel", font=("Arial", 18, "bold"))
+        apply_ttk_style(self)
 
         self.db = SupabaseService()
         self.productos = self.db.get_productos()
@@ -63,18 +49,18 @@ class POSApp(tk.Tk):
     # ---------------- UI ----------------
     def _build_ui(self):
         # Top bar
-        top = tk.Frame(self, bg="#1f2937")
+        top = tk.Frame(self, bg=THEME["header_bg"])
         top.pack(fill="x")
 
-        left_top = tk.Frame(top, bg="#1f2937")
+        left_top = tk.Frame(top, bg=THEME["header_bg"])
         left_top.pack(side="left", padx=12, pady=8)
 
-        self.logo_img = load_logo(72)
+        self.logo_img = load_logo(80)
         if self.logo_img:
-            tk.Label(left_top, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(0, 8))
-        tk.Label(left_top, text="BARBACOA POS", font=("Arial", 18, "bold"), fg="white", bg="#1f2937").pack(side="left")
+            tk.Label(left_top, image=self.logo_img, bg=THEME["header_bg"]).pack(side="left", padx=(0, 10))
+        tk.Label(left_top, text="BARBACOA POS", font=FONTS["header"], fg=THEME["header_fg"], bg=THEME["header_bg"]).pack(side="left")
 
-        center_top = tk.Frame(top, bg="#1f2937")
+        center_top = tk.Frame(top, bg=THEME["header_bg"])
         center_top.pack(side="left", padx=16, pady=6)
         ttk.Button(center_top, text="Gastos", command=self._open_gastos).pack(side="left", padx=4, pady=6)
         ttk.Button(center_top, text="Propinas", command=self._open_propinas).pack(side="left", padx=4, pady=6)
@@ -83,9 +69,9 @@ class POSApp(tk.Tk):
         ttk.Button(center_top, text="Corte", command=self._open_corte).pack(side="left", padx=4, pady=6)
         ttk.Button(center_top, text="Reportes", command=self._open_reportes).pack(side="left", padx=4, pady=6)
 
-        right_top = tk.Frame(top, bg="#1f2937")
+        right_top = tk.Frame(top, bg=THEME["header_bg"])
         right_top.pack(side="right", padx=12, pady=6)
-        tk.Label(right_top, text="Mesero", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e")
+        tk.Label(right_top, text="Mesero", fg=THEME["header_fg"], bg=THEME["header_bg"], font=("Arial", 10, "bold")).pack(anchor="e")
         self.mesero_var = tk.StringVar()
         self.mesero_menu = ttk.Combobox(right_top, textvariable=self.mesero_var, state="normal", width=22)
         self.mesero_menu.pack(anchor="e", pady=(2, 0))
@@ -95,14 +81,14 @@ class POSApp(tk.Tk):
         self.mesero_menu.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
         self._refresh_meseros_dropdown()
 
-        tk.Label(right_top, text="Mesa", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e", pady=(6, 0))
+        tk.Label(right_top, text="Mesa", fg=THEME["header_fg"], bg=THEME["header_bg"], font=("Arial", 10, "bold")).pack(anchor="e", pady=(6, 0))
         self.mesa_var = tk.StringVar()
         self.mesa_entry = ttk.Entry(right_top, textvariable=self.mesa_var, width=24)
         self.mesa_entry.pack(anchor="e", pady=(2, 0))
         self.mesa_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
 
         self.clock_var = tk.StringVar()
-        tk.Label(right_top, textvariable=self.clock_var, fg="#e5e7eb", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e", pady=(6, 0))
+        tk.Label(right_top, textvariable=self.clock_var, fg=THEME["header_fg"], bg=THEME["header_bg"], font=("Arial", 11, "bold")).pack(anchor="e", pady=(6, 0))
         ttk.Button(right_top, text="Salir", style="Danger.TButton", command=self._exit_app).pack(anchor="e", pady=(6, 0))
 
         # Main split
@@ -116,15 +102,15 @@ class POSApp(tk.Tk):
         right.pack(side="right", fill="both", expand=True)
 
         # Left: comandas + filters + catalog
-        cmd_box = tk.Frame(left, bg="#f3f4f6")
+        cmd_box = tk.Frame(left, bg=THEME["surface"])
         cmd_box.pack(fill="x", pady=(0, 8))
-        tk.Label(cmd_box, text="Comandas abiertas", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+        tk.Label(cmd_box, text="Comandas abiertas", font=FONTS["section"], fg=THEME["text"], bg=THEME["surface"]).pack(anchor="w", padx=6, pady=4)
         self.comandas_list = tk.Listbox(
             left,
             height=6,
-            font=("Arial", 11),
+            font=("Arial", 12, "bold"),
             activestyle="none",
-            selectbackground="#1d4ed8",
+            selectbackground=THEME["accent"],
             selectforeground="white",
             highlightthickness=1,
             highlightbackground="#d1d5db",
@@ -137,20 +123,20 @@ class POSApp(tk.Tk):
         ttk.Button(cmd_btns, text="Nueva comanda", command=self._new_comanda).pack(side="left", padx=4)
         ttk.Button(cmd_btns, text="Cerrar comanda", command=self._close_comanda).pack(side="left", padx=4)
 
-        atajos_box = tk.Frame(left, bg="#f3f4f6")
+        atajos_box = tk.Frame(left, bg=THEME["surface"])
         atajos_box.pack(fill="x", pady=(0, 8))
-        tk.Label(atajos_box, text="Atajos", font=("Arial", 11, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+        tk.Label(atajos_box, text="Atajos", font=("Arial", 11, "bold"), fg=THEME["text"], bg=THEME["surface"]).pack(anchor="w", padx=6, pady=4)
         atajos_txt = (
             "Ctrl+S Guardar  |  Ctrl+N Nueva\n"
             "Ctrl+F Buscar   |  Ctrl+M Mesero\n"
             "Ctrl+D Eliminar |  Ctrl+L Vaciar\n"
             "Enter agrega / guarda"
         )
-        tk.Label(atajos_box, text=atajos_txt, font=("Arial", 9), fg="#374151", bg="#f3f4f6", justify="left").pack(anchor="w", padx=6, pady=(0, 6))
+        tk.Label(atajos_box, text=atajos_txt, font=("Arial", 10), fg=THEME["text_muted"], bg=THEME["surface"], justify="left").pack(anchor="w", padx=6, pady=(0, 6))
 
-        cat_box = tk.Frame(left, bg="#f3f4f6")
+        cat_box = tk.Frame(left, bg=THEME["surface"])
         cat_box.pack(fill="x", pady=(0, 4))
-        tk.Label(cat_box, text="Catálogo", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+        tk.Label(cat_box, text="Catálogo", font=FONTS["section"], fg=THEME["text"], bg=THEME["surface"]).pack(anchor="w", padx=6, pady=4)
 
         self.search_var = tk.StringVar()
         self.search_entry = ttk.Entry(left, textvariable=self.search_var, width=30)
@@ -169,9 +155,9 @@ class POSApp(tk.Tk):
         self.prod_list = tk.Listbox(
             left,
             height=25,
-            font=("Arial", 11),
+            font=("Arial", 12),
             activestyle="none",
-            selectbackground="#1d4ed8",
+            selectbackground=THEME["accent"],
             selectforeground="white",
             highlightthickness=1,
             highlightbackground="#d1d5db",
@@ -191,9 +177,9 @@ class POSApp(tk.Tk):
         ttk.Button(left, text="Agregar", command=self._add_selected_product).pack(fill="x")
 
         # Right: ticket table
-        cmd_hdr = tk.Frame(right, bg="#f3f4f6")
+        cmd_hdr = tk.Frame(right, bg=THEME["surface"])
         cmd_hdr.pack(fill="x")
-        tk.Label(cmd_hdr, text="Comanda", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+        tk.Label(cmd_hdr, text="Comanda", font=FONTS["section"], fg=THEME["text"], bg=THEME["surface"]).pack(anchor="w", padx=6, pady=4)
 
         table_frame = ttk.Frame(right)
         table_frame.pack(fill="both", expand=True, pady=8)
@@ -226,17 +212,17 @@ class POSApp(tk.Tk):
         ttk.Button(btns, text="Vaciar", command=self._clear_all).pack(side="left", padx=5)
 
         ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(10, 6))
-        cobro_hdr = tk.Frame(right, bg="#e5e7eb")
+        cobro_hdr = tk.Frame(right, bg=THEME["surface_alt"])
         cobro_hdr.pack(fill="x", pady=(0, 6))
-        tk.Label(cobro_hdr, text="Cobro", font=("Arial", 12, "bold"), fg="#111827", bg="#e5e7eb").pack(anchor="w", padx=6, pady=4)
+        tk.Label(cobro_hdr, text="Cobro", font=FONTS["section"], fg=THEME["text"], bg=THEME["surface_alt"]).pack(anchor="w", padx=6, pady=4)
 
         # Payment + total
-        pay = tk.Frame(right, bg="#f3f4f6")
+        pay = tk.Frame(right, bg=THEME["surface"])
         pay.pack(fill="x", pady=(0, 6))
 
         self.total_var = tk.StringVar(value="0.00")
-        tk.Label(pay, text="TOTAL:", font=("Arial", 22, "bold"), fg="#111827", bg="#f3f4f6").pack(side="left", padx=6, pady=6)
-        tk.Label(pay, textvariable=self.total_var, font=("Arial", 24, "bold"), fg="#dc2626", bg="#f3f4f6").pack(side="left", padx=(6, 0))
+        tk.Label(pay, text="TOTAL:", font=("Arial", 22, "bold"), fg=THEME["text"], bg=THEME["surface"]).pack(side="left", padx=6, pady=6)
+        tk.Label(pay, textvariable=self.total_var, font=("Arial", 24, "bold"), fg=THEME["danger"], bg=THEME["surface"]).pack(side="left", padx=(6, 0))
 
         pay2 = ttk.Frame(right)
         pay2.pack(fill="x")
@@ -375,8 +361,12 @@ class POSApp(tk.Tk):
             marker = "*" if i == self.active_comanda else " "
             label = f"{marker} {folio} | Mesa {mesa} - {mesero} - ${total:.2f}"
             self.comandas_list.insert(tk.END, label)
-            bg = "#ffffff" if i % 2 == 0 else "#f3f4f6"
-            self.comandas_list.itemconfig(i, bg=bg)
+            bg = THEME["row_even"] if i % 2 == 0 else THEME["row_odd"]
+            fg = THEME["text"]
+            if i == self.active_comanda:
+                bg = "#dbeafe"
+                fg = "#1e3a8a"
+            self.comandas_list.itemconfig(i, bg=bg, fg=fg)
         if self.active_comanda is not None and self.comandas_list.size() > 0:
             self.comandas_list.selection_clear(0, tk.END)
             self.comandas_list.selection_set(self.active_comanda)
@@ -457,7 +447,7 @@ class POSApp(tk.Tk):
             self.filtered.append(p)
             self.prod_list.insert(tk.END, label)
             idx = self.prod_list.size() - 1
-            bg = "#ffffff" if idx % 2 == 0 else "#f3f4f6"
+            bg = THEME["row_even"] if idx % 2 == 0 else THEME["row_odd"]
             self.prod_list.itemconfig(idx, bg=bg)
 
     def _add_selected_product(self):
@@ -498,8 +488,8 @@ class POSApp(tk.Tk):
                         f"${float(it['subtotal']):.2f}")
                 , tags=(tag,)
             )
-        self.tree.tag_configure("even", background="#ffffff")
-        self.tree.tag_configure("odd", background="#f3f4f6")
+        self.tree.tag_configure("even", background=THEME["row_even"])
+        self.tree.tag_configure("odd", background=THEME["row_odd"])
         total = calcular_total(self.items) if self.items else 0.0
         self.total_var.set(f"${total:.2f}")
         self._update_change()

@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
+from ui.theme import THEME, FONTS, apply_ttk_style, build_header
 
 class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
@@ -16,6 +17,7 @@ class GastosDialog(ctk.CTkToplevel):
         self.resizable(False, False)
         self.grab_set()  # solo se puede interactuar con la ventana de adelante
 
+        apply_ttk_style(self)
         self.db = supabase
 
         # --- CONFIGURACIÓN DE CATEGORÍAS ---
@@ -35,21 +37,17 @@ class GastosDialog(ctk.CTkToplevel):
 
     def _build_ui(self):
         # 1. TÍTULO CON ESTILO
-        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
-        header.pack(fill="x", side="top")
         self.logo_img = load_logo(40)
-        if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
+        build_header(self, "REGISTRO DE GASTOS Y SALIDAS", logo_img=self.logo_img)
 
         # 2. FRAME DEL FORMULARIO
         form_frame = ctk.CTkFrame(self)
         form_frame.pack(fill="x", padx=20, pady=15)
 
         # --- FILA 1: Labels de guía ---
-        ctk.CTkLabel(form_frame, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
-        ctk.CTkLabel(form_frame, text="Categoría", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
-        ctk.CTkLabel(form_frame, text="Método de Pago", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Monto ($)", font=FONTS["section"]).grid(row=0, column=0, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Categoría", font=FONTS["section"]).grid(row=0, column=1, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Método de Pago", font=FONTS["section"]).grid(row=0, column=2, padx=10, sticky="w")
 
         # --- FILA 2: Inputs principales ---
         self.entry_monto = ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 450.00", width=140)
@@ -58,18 +56,18 @@ class GastosDialog(ctk.CTkToplevel):
         self.menu_cat = ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=160)
         self.menu_cat.grid(row=1, column=1, padx=10, pady=(0, 15))
 
-        self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=160, fg_color="#34495e")
+        self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=160, fg_color=THEME["header_bg"])
         self.menu_pago.grid(row=1, column=2, padx=10, pady=(0, 15))
 
         # --- FILA 3: Descripción y Botón ---
-        ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=("Arial", 12, "bold")).grid(row=2, column=0, columnspan=2, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=FONTS["section"]).grid(row=2, column=0, columnspan=2, padx=10, sticky="w")
         
         self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó el crédito? (Ej: Compra de Cilantro)", width=480)
         self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
 
         # Botón de Guardar 
         self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO", font=("Arial", 14, "bold"), 
-                                     fg_color="#27ae60", hover_color="#1e8449", height=40,
+                                     fg_color="#16a34a", hover_color="#15803d", height=40,
                                      command=self._guardar)
         self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
 
@@ -83,7 +81,7 @@ class GastosDialog(ctk.CTkToplevel):
         
         ctk.CTkLabel(table_header, text="RESUMEN DE GASTOS DEL DÍA", font=("Arial", 14, "bold")).pack(side="left")
         
-        total_display = ctk.CTkFrame(table_header, fg_color="#dc2626", corner_radius=8)
+        total_display = ctk.CTkFrame(table_header, fg_color=THEME["danger"], corner_radius=8)
         total_display.pack(side="right")
         ctk.CTkLabel(total_display, text="TOTAL:", font=("Arial", 13, "bold"), text_color="white").pack(side="left", padx=10)
         ctk.CTkLabel(total_display, textvariable=self.total_dia_var, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=(0, 10))

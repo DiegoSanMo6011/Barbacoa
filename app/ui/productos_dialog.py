@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
+from ui.theme import apply_ttk_style, build_header
 
 
 class ProductosDialog(ctk.CTkToplevel):
@@ -16,6 +17,7 @@ class ProductosDialog(ctk.CTkToplevel):
         self.resizable(False, False)
         self.grab_set()
 
+        apply_ttk_style(self)
         self.db = supabase
         self.selected_id = None
 
@@ -28,12 +30,8 @@ class ProductosDialog(ctk.CTkToplevel):
         self._load_productos()
 
     def _build_ui(self):
-        header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
-        header.pack(fill="x", side="top")
         self.logo_img = load_logo(40)
-        if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="CATÁLOGO DE PRODUCTOS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
+        build_header(self, "CATÁLOGO DE PRODUCTOS", logo_img=self.logo_img)
 
         form = ctk.CTkFrame(self)
         form.pack(fill="x", padx=12, pady=12)
