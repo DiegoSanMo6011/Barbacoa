@@ -49,7 +49,7 @@ class ReportesView(ctk.CTkToplevel):
 
     def _build_ui(self):
         self.logo_img = load_logo(40)
-        build_header(self, "REPORTES", logo_img=self.logo_img)
+        header = build_header(self, "REPORTES", logo_img=self.logo_img)
 
         date_row = ctk.CTkFrame(header, fg_color="transparent")
         date_row.pack(side="right", padx=12)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tkinter as tk
 from tkinter import ttk
 import customtkinter as ctk
 
@@ -47,7 +48,7 @@ def build_header(parent, title: str, logo_img=None) -> ctk.CTkFrame:
     header = ctk.CTkFrame(parent, fg_color=THEME["header_bg"], height=60, corner_radius=0)
     header.pack(fill="x", side="top")
     if logo_img:
-        ctk.CTkLabel(header, text="", image=logo_img).pack(side="left", padx=(12, 6), pady=12)
+        tk.Label(header, image=logo_img, bg=THEME["header_bg"]).pack(side="left", padx=(12, 6), pady=12)
     ctk.CTkLabel(header, text=title, font=FONTS["header"], text_color=THEME["header_fg"]).pack(
         side="left", padx=(6, 12), pady=12
     )
