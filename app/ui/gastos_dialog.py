@@ -68,9 +68,12 @@ class GastosDialog(ctk.CTkToplevel):
         self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
 
         # Botón de Guardar 
-        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR GASTO", font=("Arial", 14, "bold"), 
-                                     fg_color="#27ae60", hover_color="#1e8449", height=40,
-                                     command=self._guardar)
+        self.btn_save = ttk.Button(
+            form_frame,
+            text="GUARDAR GASTO",
+            style="Accent.TButton",
+            command=self._guardar,
+        )
         self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
 
         # 3. SECCIÓN DE HISTORIAL

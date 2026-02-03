@@ -50,7 +50,9 @@ class ProductosDialog(ctk.CTkToplevel):
 
         ctk.CTkCheckBox(form, text="Activo", variable=self.activo_var).grid(row=1, column=2, padx=6, pady=6, sticky="w")
 
-        ctk.CTkButton(form, text="Guardar", command=self._guardar).grid(row=1, column=3, padx=6, pady=6, sticky="e")
+        ttk.Button(form, text="Guardar", style="Accent.TButton", command=self._guardar).grid(
+            row=1, column=3, padx=6, pady=6, sticky="e"
+        )
 
         table_frame = ctk.CTkFrame(self)
         table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -69,8 +71,8 @@ class ProductosDialog(ctk.CTkToplevel):
 
         btns = ctk.CTkFrame(self, fg_color="transparent")
         btns.pack(fill="x", padx=12, pady=(0, 12))
-        ctk.CTkButton(btns, text="Nuevo", command=self._nuevo).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Refrescar", command=self._load_productos).pack(side="left", padx=6)
+        ttk.Button(btns, text="Nuevo", command=self._nuevo).pack(side="left", padx=6)
+        ttk.Button(btns, text="Refrescar", command=self._load_productos).pack(side="left", padx=6)
 
     def _load_productos(self):
         for row in self.tree.get_children():

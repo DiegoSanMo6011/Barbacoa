@@ -59,7 +59,7 @@ class PropinasDialog(ctk.CTkToplevel):
         self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
 
-        ctk.CTkButton(sec_a, text="Guardar", command=self._guardar_propina).grid(
+        ttk.Button(sec_a, text="Guardar", style="Accent.TButton", command=self._guardar_propina).grid(
             row=2, column=3, padx=6, pady=6, sticky="e"
         )
 
@@ -81,7 +81,7 @@ class PropinasDialog(ctk.CTkToplevel):
         self.month_menu = ctk.CTkOptionMenu(sec_b, values=months, variable=self.month_var)
         self.month_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
-        ctk.CTkButton(sec_b, text="Actualizar", command=self._load_reporte).grid(
+        ttk.Button(sec_b, text="Actualizar", command=self._load_reporte).grid(
             row=1, column=4, padx=6, pady=6, sticky="e"
         )
 

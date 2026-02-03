@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 
@@ -27,8 +27,10 @@ class TicketPreview(ctk.CTkToplevel):
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=12, pady=(0, 12))
         if file_path:
-            ctk.CTkButton(actions, text="Ruta del archivo", command=lambda: self._show_path(file_path)).pack(side="left", padx=6)
-        ctk.CTkButton(actions, text="Cerrar", command=self.destroy).pack(side="right", padx=6)
+            ttk.Button(actions, text="Ruta del archivo", command=lambda: self._show_path(file_path)).pack(
+                side="left", padx=6
+            )
+        ttk.Button(actions, text="Cerrar", style="Danger.TButton", command=self.destroy).pack(side="right", padx=6)
 
     def _show_path(self, path: str):
         messagebox.showinfo("Ticket guardado", f"Archivo: {path}")

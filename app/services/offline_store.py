@@ -5,8 +5,12 @@ import os
 import sqlite3
 from datetime import datetime
 
+from .offline_ops import OfflineOperation, OfflineRecord, operation_from_record
+
 
 class OfflineStore:
+    """Persistencia local de operaciones para modo offline (SQLite)."""
+
     def __init__(self, base_dir: str):
         data_dir = os.path.join(base_dir, "data")
         os.makedirs(data_dir, exist_ok=True)
@@ -28,27 +32,27 @@ class OfflineStore:
             )
             conn.commit()
 
-    def enqueue(self, op: str, payload: dict) -> None:
+    def enqueue(self, operation: OfflineOperation) -> None:
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.cursor()
             cur.execute(
                 "INSERT INTO offline_ops (op, payload, created_at) VALUES (?, ?, ?)",
-                (op, json.dumps(payload, ensure_ascii=False), datetime.now().isoformat(timespec="seconds")),
+                (
+                    operation.record_op(),
+                    json.dumps(operation.payload, ensure_ascii=False),
+                    datetime.now().isoformat(timespec="seconds"),
+                ),
             )
             conn.commit()
 
-    def list_ops(self) -> list[dict]:
+    def list_ops(self) -> list[OfflineRecord]:
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.cursor()
             rows = cur.execute("SELECT id, op, payload, created_at FROM offline_ops ORDER BY id").fetchall()
-        result = []
+        result: list[OfflineRecord] = []
         for row in rows:
-            result.append({
-                "id": row[0],
-                "op": row[1],
-                "payload": json.loads(row[2]),
-                "created_at": row[3],
-            })
+            operation = operation_from_record(row[1], json.loads(row[2]))
+            result.append(OfflineRecord(record_id=row[0], operation=operation, created_at=row[3]))
         return result
 
     def delete_op(self, op_id: int) -> None:
@@ -64,6 +68,9 @@ class OfflineStore:
         path = os.path.join(backup_dir, f"offline_{stamp}.json")
         if os.path.exists(path):
             return
-        data = {"generated_at": datetime.now().isoformat(timespec="seconds"), "ops": self.list_ops()}
+        data = {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "ops": [record.to_dict() for record in self.list_ops()],
+        }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

@@ -34,7 +34,9 @@ class PersonalDialog(ctk.CTkToplevel):
         form.pack(fill="x", padx=12, pady=12)
         ctk.CTkLabel(form, text="Nombre:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
         ctk.CTkEntry(form, textvariable=self.nombre_var, width=220).grid(row=0, column=1, padx=6, pady=6, sticky="w")
-        ctk.CTkButton(form, text="Agregar", command=self._crear_mesero).grid(row=0, column=2, padx=6, pady=6, sticky="w")
+        ttk.Button(form, text="Agregar", style="Accent.TButton", command=self._crear_mesero).grid(
+            row=0, column=2, padx=6, pady=6, sticky="w"
+        )
 
         table_frame = ctk.CTkFrame(self)
         table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
@@ -49,8 +51,8 @@ class PersonalDialog(ctk.CTkToplevel):
 
         btns = ctk.CTkFrame(self, fg_color="transparent")
         btns.pack(fill="x", padx=12, pady=(0, 12))
-        ctk.CTkButton(btns, text="Activar/Desactivar", command=self._toggle_activo).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="Refrescar", command=self._load_meseros).pack(side="left", padx=6)
+        ttk.Button(btns, text="Activar/Desactivar", command=self._toggle_activo).pack(side="left", padx=6)
+        ttk.Button(btns, text="Refrescar", command=self._load_meseros).pack(side="left", padx=6)
 
     def _load_meseros(self):
         for row in self.tree.get_children():
