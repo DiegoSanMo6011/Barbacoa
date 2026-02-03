@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 from domain.corte import calc_diferencia, calc_efectivo_teorico
@@ -62,7 +62,7 @@ class CorteView(ctk.CTkToplevel):
         date_row.pack(side="right")
         ctk.CTkLabel(date_row, text="Fecha (YYYY-MM-DD):").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_var, width=140).pack(side="left", padx=6)
-        ctk.CTkButton(date_row, text="Cargar", command=self._refresh).pack(side="left", padx=6)
+        ttk.Button(date_row, text="Cargar", command=self._refresh).pack(side="left", padx=6)
 
         resumen = ctk.CTkFrame(self)
         resumen.pack(fill="x", padx=12, pady=(0, 12))
@@ -103,7 +103,9 @@ class CorteView(ctk.CTkToplevel):
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=12, pady=(0, 12))
-        ctk.CTkButton(actions, text="Guardar corte", command=self._guardar_corte).pack(side="left", padx=6)
+        ttk.Button(actions, text="Guardar corte", style="Accent.TButton", command=self._guardar_corte).pack(
+            side="left", padx=6
+        )
 
     def _parse_fecha(self) -> date | None:
         txt = self.fecha_var.get().strip()

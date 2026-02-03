@@ -38,51 +38,33 @@ class ProductosDialog(ctk.CTkToplevel):
         
         self.logo_img = load_logo(40)
         if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(15, 10), pady=10)
-        
-        ctk.CTkLabel(header, text="CATALOGO DE PRODUCTOS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", pady=10)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
+        ctk.CTkLabel(header, text="CATÁLOGO DE PRODUCTOS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
-        # 2. FORMULARIO EDICION
-        form_frame = ctk.CTkFrame(self)
-        form_frame.pack(fill="x", padx=20, pady=20)
+        form = ctk.CTkFrame(self)
+        form.pack(fill="x", padx=12, pady=12)
 
-        # -- Fila 1 Labels --
-        ctk.CTkLabel(form_frame, text="Nombre del Producto", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
-        ctk.CTkLabel(form_frame, text="Categoria", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
-        ctk.CTkLabel(form_frame, text="Precio ($)", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10, sticky="w")
+        ctk.CTkLabel(form, text="Nombre:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
+        ctk.CTkEntry(form, textvariable=self.nombre_var, width=240).grid(row=0, column=1, padx=6, pady=6, sticky="w")
 
-        # -- Fila 2 Inputs --
-        ctk.CTkEntry(form_frame, textvariable=self.nombre_var, placeholder_text="Ej: Tacos de Suadero", width=300, height=35).grid(row=1, column=0, padx=10, pady=(5, 15))
-        
-        # Menu con color uniforme
-        ctk.CTkOptionMenu(form_frame, values=self.categorias_list, variable=self.categoria_var, width=180, height=35,
-                          fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50").grid(row=1, column=1, padx=10, pady=(5, 15))
+        ctk.CTkLabel(form, text="Categoría:").grid(row=0, column=2, padx=6, pady=6, sticky="w")
+        self.cat_entry = ctk.CTkEntry(form, textvariable=self.categoria_var, width=160)
+        self.cat_entry.grid(row=0, column=3, padx=6, pady=6, sticky="w")
 
-        ctk.CTkEntry(form_frame, textvariable=self.precio_var, placeholder_text="0.00", width=120, height=35).grid(row=1, column=2, padx=10, pady=(5, 15))
+        ctk.CTkLabel(form, text="Precio:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
+        ctk.CTkEntry(form, textvariable=self.precio_var, width=120).grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
-        # -- Fila 3 Botones y Checkbox --
-        action_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        action_frame.grid(row=2, column=0, columnspan=3, sticky="ew", padx=10, pady=5)
-        
-        ctk.CTkCheckBox(action_frame, text="Producto Activo (Visible en venta)", variable=self.activo_var).pack(side="left")
+        ctk.CTkCheckBox(form, text="Activo", variable=self.activo_var).grid(row=1, column=2, padx=6, pady=6, sticky="w")
 
-        # Botones alineados a la derecha
-        ctk.CTkButton(action_frame, text="GUARDAR", font=("Arial", 12, "bold"), 
-                      fg_color="#27ae60", hover_color="#219a52", width=150, height=35,
-                      command=self._guardar).pack(side="right", padx=(10, 0))
-        
-        ctk.CTkButton(action_frame, text="LIMPIAR / NUEVO", font=("Arial", 12, "bold"), 
-                      fg_color="#7f8c8d", hover_color="#95a5a6", width=150, height=35,
-                      command=self._nuevo).pack(side="right")
+        ttk.Button(form, text="Guardar", style="Accent.TButton", command=self._guardar).grid(
+            row=1, column=3, padx=6, pady=6, sticky="e"
+        )
 
-        # 3. TABLA
-        list_frame = ctk.CTkFrame(self)
-        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        table_frame = ctk.CTkFrame(self)
+        table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-        cols = ("nombre", "categoria", "precio", "activo")
-        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=10)
-
-        self.tree.heading("nombre", text="Producto")
+        self.tree = ttk.Treeview(table_frame, columns=("nombre", "categoria", "precio", "activo"), show="headings", height=12)
+        self.tree.heading("nombre", text="Nombre")
         self.tree.heading("categoria", text="Categoría")
         self.tree.heading("precio", text="Precio")
         self.tree.heading("activo", text="Activo")
@@ -92,13 +74,10 @@ class ProductosDialog(ctk.CTkToplevel):
         self.tree.column("precio", width=100, anchor="e")
         self.tree.column("activo", width=80, anchor="center")
 
-        scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=scroller.set)
-        
-        self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
-        scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
-
-        self.tree.bind("<Double-1>", self._on_select)
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=12, pady=(0, 12))
+        ttk.Button(btns, text="Nuevo", command=self._nuevo).pack(side="left", padx=6)
+        ttk.Button(btns, text="Refrescar", command=self._load_productos).pack(side="left", padx=6)
 
     def _load_productos(self):
         for item in self.tree.get_children():

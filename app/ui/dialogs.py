@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 
 class QuantityDialog(ctk.CTkToplevel):
@@ -27,8 +27,8 @@ class QuantityDialog(ctk.CTkToplevel):
         btns = ctk.CTkFrame(self, fg_color="transparent")
         btns.pack(pady=10)
 
-        ctk.CTkButton(btns, text="Cancelar", command=self._cancel).pack(side="left", padx=6)
-        ctk.CTkButton(btns, text="OK", command=self._ok).pack(side="left", padx=6)
+        ttk.Button(btns, text="Cancelar", command=self._cancel).pack(side="left", padx=6)
+        ttk.Button(btns, text="OK", style="Accent.TButton", command=self._ok).pack(side="left", padx=6)
 
         self.bind("<Return>", lambda _e: self._ok())
         self.bind("<Escape>", lambda _e: self._cancel())

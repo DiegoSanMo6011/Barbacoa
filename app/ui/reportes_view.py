@@ -59,9 +59,9 @@ class ReportesView(ctk.CTkToplevel):
         ctk.CTkEntry(date_row, textvariable=self.fecha_inicio_var, width=120).pack(side="left", padx=6)
         ctk.CTkLabel(date_row, text="Fin:").pack(side="left", padx=6)
         ctk.CTkEntry(date_row, textvariable=self.fecha_fin_var, width=120).pack(side="left", padx=6)
-        ctk.CTkButton(date_row, text="Cargar", command=self._load_reportes).pack(side="left", padx=6)
-        ctk.CTkButton(date_row, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
-        ctk.CTkButton(date_row, text="Gráficas", command=self._open_graficas).pack(side="left", padx=6)
+        ttk.Button(date_row, text="Cargar", command=self._load_reportes).pack(side="left", padx=6)
+        ttk.Button(date_row, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
+        ttk.Button(date_row, text="Gráficas", command=self._open_graficas).pack(side="left", padx=6)
 
         resumen = ctk.CTkFrame(self)
         resumen.pack(fill="x", padx=12, pady=(12, 12))
@@ -115,7 +115,7 @@ class ReportesView(ctk.CTkToplevel):
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=12, pady=(0, 12))
-        ctk.CTkButton(actions, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
+        ttk.Button(actions, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
 
     def _parse_fecha(self, value: str) -> date | None:
         try:

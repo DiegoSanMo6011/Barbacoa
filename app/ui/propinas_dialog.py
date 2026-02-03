@@ -39,60 +39,65 @@ class PropinasDialog(ctk.CTkToplevel):
         
         self.logo_img = load_logo(40)
         if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(15, 10), pady=10)
-        
-        ctk.CTkLabel(header, text="REGISTRO DE PROPINAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", pady=10)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
+        ctk.CTkLabel(header, text="PROPINAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
 
-        # 2. PANEL DE REGISTRO
-        reg_frame = ctk.CTkFrame(self)
-        reg_frame.pack(fill="x", padx=20, pady=20)
-        
-        ctk.CTkLabel(reg_frame, text="Registrar Nueva Propina", font=("Arial", 14, "bold")).pack(anchor="w", padx=15, pady=(15, 5))
-        
-        form_inner = ctk.CTkFrame(reg_frame, fg_color="transparent")
-        form_inner.pack(fill="x", padx=5, pady=(0, 15))
+        sec_a = ctk.CTkFrame(self)
+        sec_a.pack(fill="x", padx=12, pady=12)
+        ctk.CTkLabel(sec_a, text="Registrar propina", font=("Arial", 14, "bold")).grid(
+            row=0, column=0, columnspan=4, padx=6, pady=(6, 10), sticky="w"
+        )
 
-        # Labels
-        ctk.CTkLabel(form_inner, text="Mesero", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
-        ctk.CTkLabel(form_inner, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
+        ctk.CTkLabel(sec_a, text="Monto:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
+        ctk.CTkEntry(sec_a, textvariable=self.monto_var, width=120).grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
-        # Inputs
-        self.menu_mesero = ctk.CTkOptionMenu(form_inner, values=["Cargando..."], variable=self.mesero_var, width=250, height=35,
-                                             fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50")
-        self.menu_mesero.grid(row=1, column=0, padx=10, pady=(5,0))
+        ctk.CTkLabel(sec_a, text="Mesero:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
+        self.mesero_menu = ctk.CTkOptionMenu(
+            sec_a,
+            values=[],
+            variable=self.mesero_var,
+            command=self._on_mesero_selected,
+        )
+        self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
-        self.entry_monto = ctk.CTkEntry(form_inner, textvariable=self.monto_var, placeholder_text="0.00", width=150, height=35)
-        self.entry_monto.grid(row=1, column=1, padx=10, pady=(5,0))
 
-        # Botón Guardar
-        ctk.CTkButton(form_inner, text="REGISTRAR", font=("Arial", 12, "bold"), 
-                      fg_color="#27ae60", hover_color="#219a52", height=35, width=150,
-                      command=self._guardar).grid(row=1, column=2, padx=20, pady=(5,0))
+        ttk.Button(sec_a, text="Guardar", style="Accent.TButton", command=self._guardar_propina).grid(
+            row=2, column=3, padx=6, pady=6, sticky="e"
+        )
 
-        # 3. REPORTE MENSUAL
-        list_frame = ctk.CTkFrame(self)
-        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        # Section B: reporte mensual
+        sec_b = ctk.CTkFrame(self)
+        sec_b.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-        # Filtros del reporte
-        filter_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
-        filter_frame.pack(fill="x", padx=10, pady=10)
+        ctk.CTkLabel(sec_b, text="Reporte mensual", font=("Arial", 14, "bold")).grid(
+            row=0, column=0, columnspan=5, padx=6, pady=(10, 6), sticky="w"
+        )
 
-        ctk.CTkLabel(filter_frame, text="REPORTE MENSUAL:", font=("Arial", 13, "bold")).pack(side="left", padx=(5, 10))
-        
-        # Selectores de fecha compactos
-        ctk.CTkOptionMenu(filter_frame, values=["2024", "2025", "2026"], variable=self.year_var, width=80,
-                          fg_color=self.menu_color, button_color=self.menu_color).pack(side="left", padx=5)
-        
-        meses = [str(i) for i in range(1, 13)]
-        ctk.CTkOptionMenu(filter_frame, values=meses, variable=self.month_var, width=70,
-                          fg_color=self.menu_color, button_color=self.menu_color).pack(side="left", padx=5)
+        ctk.CTkLabel(sec_b, text="Ano:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
+        years = [str(date.today().year - 1), str(date.today().year), str(date.today().year + 1)]
+        self.year_menu = ctk.CTkOptionMenu(sec_b, values=years, variable=self.year_var)
+        self.year_menu.grid(row=1, column=1, padx=6, pady=6, sticky="w")
 
-        ctk.CTkButton(filter_frame, text="CONSULTAR", width=100, fg_color="#34495e", command=self._load_reporte).pack(side="left", padx=15)
+        ctk.CTkLabel(sec_b, text="Mes:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
+        months = [str(m) for m in range(1, 13)]
+        self.month_menu = ctk.CTkOptionMenu(sec_b, values=months, variable=self.month_var)
+        self.month_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
-        # Tabla
-        cols = ("mesero", "total", "cantidad")
-        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
-        
+        ttk.Button(sec_b, text="Actualizar", command=self._load_reporte).grid(
+            row=1, column=4, padx=6, pady=6, sticky="e"
+        )
+
+        table_frame = ctk.CTkFrame(sec_b)
+        table_frame.grid(row=2, column=0, columnspan=5, padx=6, pady=8, sticky="nsew")
+        sec_b.grid_rowconfigure(2, weight=1)
+        sec_b.grid_columnconfigure(4, weight=1)
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=("mesero", "total", "num"),
+            show="headings",
+            height=12,
+        )
         self.tree.heading("mesero", text="Mesero")
         self.tree.heading("total", text="Total ($)")
         self.tree.heading("cantidad", text="# Propinas")

@@ -32,9 +32,13 @@ class PersonalDialog(ctk.CTkToplevel):
         
         ctk.CTkLabel(header, text="PERSONAL - MESEROS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", pady=10)
 
-        # 2. FORMULARIO DE ALTA
-        form_frame = ctk.CTkFrame(self)
-        form_frame.pack(fill="x", padx=20, pady=20)
+        form = ctk.CTkFrame(self)
+        form.pack(fill="x", padx=12, pady=12)
+        ctk.CTkLabel(form, text="Nombre:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
+        ctk.CTkEntry(form, textvariable=self.nombre_var, width=220).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        ttk.Button(form, text="Agregar", style="Accent.TButton", command=self._crear_mesero).grid(
+            row=0, column=2, padx=6, pady=6, sticky="w"
+        )
 
         ctk.CTkLabel(form_frame, text="Nombre del Nuevo Mesero", font=("Arial", 12, "bold")).pack(anchor="w", padx=15, pady=(10, 5))
         
@@ -55,27 +59,10 @@ class PersonalDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(list_frame, text="LISTA DE PERSONAL ACTIVO", font=("Arial", 13, "bold")).pack(anchor="w", padx=10, pady=10)
 
-        cols = ("nombre", "estado")
-        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=10)
-        
-        self.tree.heading("nombre", text="Nombre")
-        self.tree.heading("estado", text="Estado (Activo)")
-        
-        self.tree.column("nombre", width=400)
-        self.tree.column("estado", width=150, anchor="center")
-
-        scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=scroller.set)
-        
-        self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=(0,10))
-        scroller.pack(side="right", fill="y", padx=(0,10), pady=(0,10))
-
-        # Botón para cambiar estado (Secundario/Azul)
-        btn_action = ctk.CTkFrame(self, fg_color="transparent")
-        btn_action.pack(fill="x", padx=20, pady=(0, 20))
-        ctk.CTkButton(btn_action, text="CAMBIAR ESTADO (ACTIVO/INACTIVO)", 
-                      fg_color="#34495e", hover_color="#2c3e50", height=35,
-                      command=self._toggle_activo).pack(fill="x")
+        btns = ctk.CTkFrame(self, fg_color="transparent")
+        btns.pack(fill="x", padx=12, pady=(0, 12))
+        ttk.Button(btns, text="Activar/Desactivar", command=self._toggle_activo).pack(side="left", padx=6)
+        ttk.Button(btns, text="Refrescar", command=self._load_meseros).pack(side="left", padx=6)
 
     def _load_meseros(self):
         for row in self.tree.get_children():

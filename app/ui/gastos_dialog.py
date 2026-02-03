@@ -74,11 +74,14 @@ class GastosDialog(ctk.CTkToplevel):
         self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó? (Ej: Compra de insumos)", width=540, height=35, font=("Arial", 14))
         self.entry_desc.grid(row=3, column=0, columnspan=2, padx=10, pady=(5, 0), sticky="w")
 
-        # Botón de Guardar: Más compacto, sin emoji, color verde estándar
-        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR", font=("Arial", 13, "bold"), 
-                                     fg_color="#27ae60", hover_color="#219a52", width=180, height=35, # Altura reducida para coincidir con inputs
-                                     command=self._guardar)
-        self.btn_save.grid(row=3, column=2, padx=10, pady=(5, 0), sticky="e")
+        # Botón de Guardar 
+        self.btn_save = ttk.Button(
+            form_frame,
+            text="GUARDAR GASTO",
+            style="Accent.TButton",
+            command=self._guardar,
+        )
+        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
 
         # 3. HISTORIAL Y TOTALES
         list_frame = ctk.CTkFrame(self)
