@@ -11,101 +11,105 @@ from ui.assets import load_logo
 class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
-        self.title("Gastos - Control de Suministros")
+        self.title("Control de Gastos")
         self.geometry("850x650")
         self.resizable(False, False)
-        self.grab_set()  # solo se puede interactuar con la ventana de adelante
+        self.grab_set()
 
         self.db = supabase
 
-        # --- CONFIGURACIÓN DE CATEGORÍAS ---
+        # --- CONFIGURACIÓN ---
         self.lista_categorias = ["INSUMOS", "GAS", "NOMINA", "MANTENIMIENTO", "GENERAL", "OTRO"]
         self.metodos_pago = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"]
+        # Color para menús planos y uniformes
+        self.menu_color = "#34495e"
 
-        # Variables de Control (Variables de Estado)
+        # Variables
         self.monto_var = tk.StringVar()
         self.categoria_var = tk.StringVar(value=self.lista_categorias[0])
         self.metodo_pago_var = tk.StringVar(value=self.metodos_pago[0])
         self.concepto_var = tk.StringVar()
-        self.nota_var = tk.StringVar()
         self.total_dia_var = tk.StringVar(value="$0.00")
 
         self._build_ui()
         self._load_gastos()
 
     def _build_ui(self):
-        # 1. TÍTULO CON ESTILO
+        # 1. HEADER ESTANDARIZADO CON LOGO
         header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
         self.logo_img = load_logo(40)
         if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(15, 10), pady=10)
+        # Título sin emoji, texto claro y profesional
+        ctk.CTkLabel(header, text="REGISTRO DE GASTOS Y SALIDAS", font=("Arial", 20, "bold"), text_color="white").pack(side="left", pady=10)
 
-        # 2. FRAME DEL FORMULARIO
+        # 2. FORMULARIO
         form_frame = ctk.CTkFrame(self)
-        form_frame.pack(fill="x", padx=20, pady=15)
+        form_frame.pack(fill="x", padx=20, pady=20)
 
-        # --- FILA 1: Labels de guía ---
+        # --- FILA 1: Monto, Categoría, Método ---
+        # Labels superiores para claridad
         ctk.CTkLabel(form_frame, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
         ctk.CTkLabel(form_frame, text="Categoría", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
         ctk.CTkLabel(form_frame, text="Método de Pago", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10, sticky="w")
 
-        # --- FILA 2: Inputs principales ---
-        self.entry_monto = ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 450.00", width=140)
-        self.entry_monto.grid(row=1, column=0, padx=10, pady=(0, 15))
+        # Inputs
+        self.entry_monto = ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 450.00", width=150, height=35, font=("Arial", 14))
+        self.entry_monto.grid(row=1, column=0, padx=10, pady=(5, 15), sticky="w")
 
-        self.menu_cat = ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=160)
-        self.menu_cat.grid(row=1, column=1, padx=10, pady=(0, 15))
+        # Menús con color uniforme (sin doble tono azul)
+        self.menu_cat = ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=180, height=35,
+                                          fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50", font=("Arial", 12))
+        self.menu_cat.grid(row=1, column=1, padx=10, pady=(5, 15), sticky="w")
 
-        self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=160, fg_color="#34495e")
-        self.menu_pago.grid(row=1, column=2, padx=10, pady=(0, 15))
+        self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=180, height=35,
+                                           fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50", font=("Arial", 12))
+        self.menu_pago.grid(row=1, column=2, padx=10, pady=(5, 15), sticky="w")
 
-        # --- FILA 3: Descripción y Botón ---
+        # --- FILA 2: Concepto y Botón de Guardar ---
         ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=("Arial", 12, "bold")).grid(row=2, column=0, columnspan=2, padx=10, sticky="w")
         
-        self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó el crédito? (Ej: Compra de Cilantro)", width=480)
-        self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
+        # Campo de descripción más ancho
+        self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó? (Ej: Compra de insumos)", width=540, height=35, font=("Arial", 14))
+        self.entry_desc.grid(row=3, column=0, columnspan=2, padx=10, pady=(5, 0), sticky="w")
 
-        # Botón de Guardar 
-        self.btn_save = ttk.Button(
-            form_frame,
-            text="GUARDAR GASTO",
-            style="Accent.TButton",
-            command=self._guardar,
-        )
-        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
+        # Botón de Guardar: Más compacto, sin emoji, color verde estándar
+        self.btn_save = ctk.CTkButton(form_frame, text="GUARDAR", font=("Arial", 13, "bold"), 
+                                     fg_color="#27ae60", hover_color="#219a52", width=180, height=35, # Altura reducida para coincidir con inputs
+                                     command=self._guardar)
+        self.btn_save.grid(row=3, column=2, padx=10, pady=(5, 0), sticky="e")
 
-        # 3. SECCIÓN DE HISTORIAL
+        # 3. HISTORIAL Y TOTALES
         list_frame = ctk.CTkFrame(self)
         list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        # Encabezado de la tabla y Totalizador
+        # Header de tabla con Totalizador
         table_header = ctk.CTkFrame(list_frame, fg_color="transparent")
         table_header.pack(fill="x", padx=10, pady=10)
         
-        ctk.CTkLabel(table_header, text="RESUMEN DE GASTOS DEL DÍA", font=("Arial", 14, "bold")).pack(side="left")
+        ctk.CTkLabel(table_header, text="GASTOS DEL DÍA", font=("Arial", 14, "bold")).pack(side="left")
         
-        total_display = ctk.CTkFrame(table_header, fg_color="#dc2626", corner_radius=8)
+        # Totalizador en rojo para resaltar salida de dinero
+        total_display = ctk.CTkFrame(table_header, fg_color="#c0392b", corner_radius=6)
         total_display.pack(side="right")
-        ctk.CTkLabel(total_display, text="TOTAL:", font=("Arial", 13, "bold"), text_color="white").pack(side="left", padx=10)
+        ctk.CTkLabel(total_display, text="TOTAL:", font=("Arial", 12, "bold"), text_color="white").pack(side="left", padx=(10, 5))
         ctk.CTkLabel(total_display, textvariable=self.total_dia_var, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=(0, 10))
 
-        # Configuración de la Tabla (Treeview)
+        # Tabla (Treeview) - Estilo estándar
         cols = ("concepto", "categoria", "metodo", "monto")
         self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
         
-        self.tree.heading("concepto", text="Descripción / Concepto")
+        self.tree.heading("concepto", text="Concepto")
         self.tree.heading("categoria", text="Categoría")
-        self.tree.heading("metodo", text="Método Pago")
+        self.tree.heading("metodo", text="Método")
         self.tree.heading("monto", text="Monto")
 
-        self.tree.column("concepto", width=300)
-        self.tree.column("categoria", width=120, anchor="center")
-        self.tree.column("metodo", width=120, anchor="center")
-        self.tree.column("monto", width=100, anchor="e")
+        self.tree.column("concepto", width=320)
+        self.tree.column("categoria", width=130, anchor="center")
+        self.tree.column("metodo", width=130, anchor="center")
+        self.tree.column("monto", width=110, anchor="e")
 
-        # Scrollbar para la tabla
         scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscroll=scroller.set)
         
@@ -113,13 +117,12 @@ class GastosDialog(ctk.CTkToplevel):
         scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
 
     def _guardar(self):
-        # 1. Obtención de datos
+        # Lógica de guardado (sin cambios funcionales, solo se quitaron emojis de los mensajes)
         concepto = self.concepto_var.get().strip()
         categoria = self.categoria_var.get()
         metodo = self.metodo_pago_var.get()
         monto_raw = self.monto_var.get().strip()
 
-        # 2. Validaciones
         if not concepto:
             messagebox.showwarning("Falta Información", "Por favor, ingresa el concepto del gasto.")
             return
@@ -131,28 +134,25 @@ class GastosDialog(ctk.CTkToplevel):
             messagebox.showerror("Error de Monto", "Ingresa un monto válido mayor a 0.")
             return
 
-        # 3. Guardado en Supabase 
         try:
-            #supabase_service ahora recibe metodo_pago
             self.db.crear_gasto(
                 concepto=concepto,
                 categoria=categoria,
                 monto=monto,
                 metodo_pago=metodo
             )
-            
-            # 4. Feedback y Limpieza
-            messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
+            # Mensaje de éxito limpio, sin emojis
+            messagebox.showinfo("Éxito", f"Gasto de ${monto:.2f} registrado correctamente.")
             self.concepto_var.set("")
             self.monto_var.set("")
-            self._load_gastos() # Refrescar la tabla
+            self._load_gastos()
+            self.entry_monto.focus_set() # Regresar foco al primer campo
             
         except Exception as e:
-            messagebox.showerror("Error de Conexión", f"No se pudo sincronizar con la base de datos:\n{e}")
+            messagebox.showerror("Error de Conexión", f"No se pudo guardar el gasto:\n{e}")
 
     def _load_gastos(self):
-        """Carga los gastos del día actual desde la base de datos."""
-        # Limpiar tabla
+        # Lógica de carga (sin cambios)
         for item in self.tree.get_children():
             self.tree.delete(item)
             
@@ -174,4 +174,4 @@ class GastosDialog(ctk.CTkToplevel):
             self.total_dia_var.set(f"${total_acumulado:.2f}")
 
         except Exception as e:
-            print(f"DEBUG: Error cargando historial: {e}")
+            print(f"Error cargando historial de gastos: {e}")
