@@ -7,20 +7,24 @@ import customtkinter as ctk
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
 
-
 class ProductosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
-        self.title("Catálogo - Productos")
-        self.geometry("860x560")
+        self.title("Catalogo de Productos")
+        self.geometry("900x650")
         self.resizable(False, False)
         self.grab_set()
 
         self.db = supabase
         self.selected_id = None
 
+        # Categorías estándar
+        self.categorias_list = ["GENERAL", "COMIDA", "BEBIDA", "POSTRE", "EXTRAS"]
+        self.menu_color = "#34495e"
+
+        # Variables
         self.nombre_var = tk.StringVar()
-        self.categoria_var = tk.StringVar(value="GENERAL")
+        self.categoria_var = tk.StringVar(value=self.categorias_list[0])
         self.precio_var = tk.StringVar()
         self.activo_var = tk.BooleanVar(value=True)
 
@@ -28,77 +32,98 @@ class ProductosDialog(ctk.CTkToplevel):
         self._load_productos()
 
     def _build_ui(self):
+        # 1. HEADER
         header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
+        
         self.logo_img = load_logo(40)
         if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="CATÁLOGO DE PRODUCTOS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(15, 10), pady=10)
+        
+        ctk.CTkLabel(header, text="CATALOGO DE PRODUCTOS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", pady=10)
 
-        form = ctk.CTkFrame(self)
-        form.pack(fill="x", padx=12, pady=12)
+        # 2. FORMULARIO EDICION
+        form_frame = ctk.CTkFrame(self)
+        form_frame.pack(fill="x", padx=20, pady=20)
 
-        ctk.CTkLabel(form, text="Nombre:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(form, textvariable=self.nombre_var, width=240).grid(row=0, column=1, padx=6, pady=6, sticky="w")
+        # -- Fila 1 Labels --
+        ctk.CTkLabel(form_frame, text="Nombre del Producto", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Categoria", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Precio ($)", font=("Arial", 12, "bold")).grid(row=0, column=2, padx=10, sticky="w")
 
-        ctk.CTkLabel(form, text="Categoría:").grid(row=0, column=2, padx=6, pady=6, sticky="w")
-        self.cat_entry = ctk.CTkEntry(form, textvariable=self.categoria_var, width=160)
-        self.cat_entry.grid(row=0, column=3, padx=6, pady=6, sticky="w")
+        # -- Fila 2 Inputs --
+        ctk.CTkEntry(form_frame, textvariable=self.nombre_var, placeholder_text="Ej: Tacos de Suadero", width=300, height=35).grid(row=1, column=0, padx=10, pady=(5, 15))
+        
+        # Menu con color uniforme
+        ctk.CTkOptionMenu(form_frame, values=self.categorias_list, variable=self.categoria_var, width=180, height=35,
+                          fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50").grid(row=1, column=1, padx=10, pady=(5, 15))
 
-        ctk.CTkLabel(form, text="Precio:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(form, textvariable=self.precio_var, width=120).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        ctk.CTkEntry(form_frame, textvariable=self.precio_var, placeholder_text="0.00", width=120, height=35).grid(row=1, column=2, padx=10, pady=(5, 15))
 
-        ctk.CTkCheckBox(form, text="Activo", variable=self.activo_var).grid(row=1, column=2, padx=6, pady=6, sticky="w")
+        # -- Fila 3 Botones y Checkbox --
+        action_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+        action_frame.grid(row=2, column=0, columnspan=3, sticky="ew", padx=10, pady=5)
+        
+        ctk.CTkCheckBox(action_frame, text="Producto Activo (Visible en venta)", variable=self.activo_var).pack(side="left")
 
-        ttk.Button(form, text="Guardar", style="Accent.TButton", command=self._guardar).grid(
-            row=1, column=3, padx=6, pady=6, sticky="e"
-        )
+        # Botones alineados a la derecha
+        ctk.CTkButton(action_frame, text="GUARDAR", font=("Arial", 12, "bold"), 
+                      fg_color="#27ae60", hover_color="#219a52", width=150, height=35,
+                      command=self._guardar).pack(side="right", padx=(10, 0))
+        
+        ctk.CTkButton(action_frame, text="LIMPIAR / NUEVO", font=("Arial", 12, "bold"), 
+                      fg_color="#7f8c8d", hover_color="#95a5a6", width=150, height=35,
+                      command=self._nuevo).pack(side="right")
 
-        table_frame = ctk.CTkFrame(self)
-        table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        # 3. TABLA
+        list_frame = ctk.CTkFrame(self)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        self.tree = ttk.Treeview(table_frame, columns=("nombre", "categoria", "precio", "activo"), show="headings", height=12)
-        self.tree.heading("nombre", text="Nombre")
+        cols = ("nombre", "categoria", "precio", "activo")
+        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=10)
+
+        self.tree.heading("nombre", text="Producto")
         self.tree.heading("categoria", text="Categoría")
         self.tree.heading("precio", text="Precio")
         self.tree.heading("activo", text="Activo")
-        self.tree.column("nombre", width=320, anchor="w")
-        self.tree.column("categoria", width=160, anchor="center")
-        self.tree.column("precio", width=120, anchor="e")
-        self.tree.column("activo", width=80, anchor="center")
-        self.tree.pack(fill="both", expand=True)
-        self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
-        btns = ctk.CTkFrame(self, fg_color="transparent")
-        btns.pack(fill="x", padx=12, pady=(0, 12))
-        ttk.Button(btns, text="Nuevo", command=self._nuevo).pack(side="left", padx=6)
-        ttk.Button(btns, text="Refrescar", command=self._load_productos).pack(side="left", padx=6)
+        self.tree.column("nombre", width=300)
+        self.tree.column("categoria", width=150, anchor="center")
+        self.tree.column("precio", width=100, anchor="e")
+        self.tree.column("activo", width=80, anchor="center")
+
+        scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=scroller.set)
+        
+        self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
+        scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
+
+        self.tree.bind("<Double-1>", self._on_select)
 
     def _load_productos(self):
-        for row in self.tree.get_children():
-            self.tree.delete(row)
+        for item in self.tree.get_children():
+            self.tree.delete(item)
         try:
-            productos = self.db.listar_productos()
+            # Usar listado completo (incluye inactivos) para gestión
+            prods = self.db.listar_productos() 
+            for p in prods:
+                activo_str = "SI" if p.get("activo") else "NO"
+                self.tree.insert("", "end", iid=str(p["id"]), values=(
+                    p.get("nombre"),
+                    p.get("categoria"),
+                    f"${float(p.get('precio') or 0):.2f}",
+                    activo_str
+                ))
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo cargar catálogo:\n{e}")
-            return
-        for p in productos:
-            activo = "SI" if p.get("activo") else "NO"
-            self.tree.insert(
-                "",
-                "end",
-                iid=str(p["id"]),
-                values=(p.get("nombre"), p.get("categoria"), f"${float(p.get('precio') or 0):.2f}", activo),
-            )
+            print(f"Error cargando productos: {e}")
 
-    def _on_select(self, _e=None):
+    def _on_select(self, event):
         sel = self.tree.selection()
-        if not sel:
-            return
+        if not sel: return
         pid = sel[0]
         values = self.tree.item(pid, "values")
-        if not values:
-            return
+        if not values: return
+
         self.selected_id = int(pid)
         self.nombre_var.set(values[0])
         self.categoria_var.set(values[1])
@@ -108,9 +133,9 @@ class ProductosDialog(ctk.CTkToplevel):
     def _nuevo(self):
         self.selected_id = None
         self.nombre_var.set("")
-        self.categoria_var.set("GENERAL")
         self.precio_var.set("")
         self.activo_var.set(True)
+        # No reseteamos categoria para agilizar captura en serie
 
     def _guardar(self):
         nombre = self.nombre_var.get().strip()
@@ -118,29 +143,27 @@ class ProductosDialog(ctk.CTkToplevel):
         precio_txt = self.precio_var.get().strip()
         activo = self.activo_var.get()
 
+        if not nombre:
+            messagebox.showwarning("Falta informacion", "El nombre es obligatorio.")
+            return
+
         try:
             precio = float(precio_txt)
-            if precio < 0:
-                raise ValueError
-        except Exception:
-            messagebox.showwarning("Precio inválido", "El precio debe ser un número >= 0.")
+            if precio < 0: raise ValueError
+        except:
+            messagebox.showwarning("Precio invalido", "Ingresa un precio valido mayor o igual a 0.")
             return
 
         try:
             if self.selected_id:
                 self.db.actualizar_producto(self.selected_id, nombre=nombre, categoria=categoria, precio=precio, activo=activo)
+                messagebox.showinfo("Exito", "Producto actualizado.")
             else:
                 self.db.crear_producto(nombre, categoria, precio, activo=activo)
+                messagebox.showinfo("Exito", "Producto creado.")
+            
             self._nuevo()
             self._load_productos()
+            
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar producto:\n{e}")
-
-
-if __name__ == "__main__":
-    ctk.set_appearance_mode("light")
-    root = ctk.CTk()
-    root.withdraw()
-    db = SupabaseService()
-    dlg = ProductosDialog(root, db)
-    dlg.mainloop()
+            messagebox.showerror("Error", f"No se pudo guardar:\n{e}")
