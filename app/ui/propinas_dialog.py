@@ -8,21 +8,22 @@ import customtkinter as ctk
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
 
-
 class PropinasDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
-        self.title("Propinas")
-        self.geometry("820x560")
+        self.title("Control de Propinas")
+        self.geometry("850x650")
         self.resizable(False, False)
         self.grab_set()
 
         self.db = supabase
-        self.mesero_map: dict[str, str] = {}
+        self.menu_color = "#34495e"
+        self.mesero_map = {} # Mapa nombre -> id
 
+        # Variables
         self.monto_var = tk.StringVar()
-        self.mesero_var = tk.StringVar()
-
+        self.mesero_var = tk.StringVar(value="Seleccionar...")
+        
         today = date.today()
         self.year_var = tk.StringVar(value=str(today.year))
         self.month_var = tk.StringVar(value=str(today.month))
@@ -32,128 +33,115 @@ class PropinasDialog(ctk.CTkToplevel):
         self._load_reporte()
 
     def _build_ui(self):
-        # Section A: registro
+        # 1. HEADER
         header = ctk.CTkFrame(self, fg_color="#1f2937", height=60, corner_radius=0)
         header.pack(fill="x", side="top")
+        
         self.logo_img = load_logo(40)
         if self.logo_img:
-            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 6), pady=12)
-        ctk.CTkLabel(header, text="PROPINAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=(6, 12), pady=12)
+            tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(15, 10), pady=10)
+        
+        ctk.CTkLabel(header, text="REGISTRO DE PROPINAS", font=("Arial", 18, "bold"), text_color="white").pack(side="left", pady=10)
 
-        sec_a = ctk.CTkFrame(self)
-        sec_a.pack(fill="x", padx=12, pady=12)
-        ctk.CTkLabel(sec_a, text="Registrar propina", font=("Arial", 14, "bold")).grid(
-            row=0, column=0, columnspan=4, padx=6, pady=(6, 10), sticky="w"
-        )
+        # 2. PANEL DE REGISTRO
+        reg_frame = ctk.CTkFrame(self)
+        reg_frame.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkLabel(reg_frame, text="Registrar Nueva Propina", font=("Arial", 14, "bold")).pack(anchor="w", padx=15, pady=(15, 5))
+        
+        form_inner = ctk.CTkFrame(reg_frame, fg_color="transparent")
+        form_inner.pack(fill="x", padx=5, pady=(0, 15))
 
-        ctk.CTkLabel(sec_a, text="Monto:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
-        ctk.CTkEntry(sec_a, textvariable=self.monto_var, width=120).grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        # Labels
+        ctk.CTkLabel(form_inner, text="Mesero", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
+        ctk.CTkLabel(form_inner, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=1, padx=10, sticky="w")
 
-        ctk.CTkLabel(sec_a, text="Mesero:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
-        self.mesero_menu = ctk.CTkOptionMenu(
-            sec_a,
-            values=[],
-            variable=self.mesero_var,
-            command=self._on_mesero_selected,
-        )
-        self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
+        # Inputs
+        self.menu_mesero = ctk.CTkOptionMenu(form_inner, values=["Cargando..."], variable=self.mesero_var, width=250, height=35,
+                                             fg_color=self.menu_color, button_color=self.menu_color, button_hover_color="#2c3e50")
+        self.menu_mesero.grid(row=1, column=0, padx=10, pady=(5,0))
 
+        self.entry_monto = ctk.CTkEntry(form_inner, textvariable=self.monto_var, placeholder_text="0.00", width=150, height=35)
+        self.entry_monto.grid(row=1, column=1, padx=10, pady=(5,0))
 
-        ttk.Button(sec_a, text="Guardar", style="Accent.TButton", command=self._guardar_propina).grid(
-            row=2, column=3, padx=6, pady=6, sticky="e"
-        )
+        # Botón Guardar
+        ctk.CTkButton(form_inner, text="REGISTRAR", font=("Arial", 12, "bold"), 
+                      fg_color="#27ae60", hover_color="#219a52", height=35, width=150,
+                      command=self._guardar).grid(row=1, column=2, padx=20, pady=(5,0))
 
-        # Section B: reporte mensual
-        sec_b = ctk.CTkFrame(self)
-        sec_b.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        # 3. REPORTE MENSUAL
+        list_frame = ctk.CTkFrame(self)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        ctk.CTkLabel(sec_b, text="Reporte mensual", font=("Arial", 14, "bold")).grid(
-            row=0, column=0, columnspan=5, padx=6, pady=(10, 6), sticky="w"
-        )
+        # Filtros del reporte
+        filter_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
+        filter_frame.pack(fill="x", padx=10, pady=10)
 
-        ctk.CTkLabel(sec_b, text="Ano:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
-        years = [str(date.today().year - 1), str(date.today().year), str(date.today().year + 1)]
-        self.year_menu = ctk.CTkOptionMenu(sec_b, values=years, variable=self.year_var)
-        self.year_menu.grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        ctk.CTkLabel(filter_frame, text="REPORTE MENSUAL:", font=("Arial", 13, "bold")).pack(side="left", padx=(5, 10))
+        
+        # Selectores de fecha compactos
+        ctk.CTkOptionMenu(filter_frame, values=["2024", "2025", "2026"], variable=self.year_var, width=80,
+                          fg_color=self.menu_color, button_color=self.menu_color).pack(side="left", padx=5)
+        
+        meses = [str(i) for i in range(1, 13)]
+        ctk.CTkOptionMenu(filter_frame, values=meses, variable=self.month_var, width=70,
+                          fg_color=self.menu_color, button_color=self.menu_color).pack(side="left", padx=5)
 
-        ctk.CTkLabel(sec_b, text="Mes:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
-        months = [str(m) for m in range(1, 13)]
-        self.month_menu = ctk.CTkOptionMenu(sec_b, values=months, variable=self.month_var)
-        self.month_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
+        ctk.CTkButton(filter_frame, text="CONSULTAR", width=100, fg_color="#34495e", command=self._load_reporte).pack(side="left", padx=15)
 
-        ttk.Button(sec_b, text="Actualizar", command=self._load_reporte).grid(
-            row=1, column=4, padx=6, pady=6, sticky="e"
-        )
-
-        table_frame = ctk.CTkFrame(sec_b)
-        table_frame.grid(row=2, column=0, columnspan=5, padx=6, pady=8, sticky="nsew")
-        sec_b.grid_rowconfigure(2, weight=1)
-        sec_b.grid_columnconfigure(4, weight=1)
-
-        self.tree = ttk.Treeview(
-            table_frame,
-            columns=("mesero", "total", "num"),
-            show="headings",
-            height=12,
-        )
+        # Tabla
+        cols = ("mesero", "total", "cantidad")
+        self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
+        
         self.tree.heading("mesero", text="Mesero")
-        self.tree.heading("total", text="Total")
-        self.tree.heading("num", text="#Registros")
+        self.tree.heading("total", text="Total ($)")
+        self.tree.heading("cantidad", text="# Propinas")
+        
+        self.tree.column("mesero", width=300)
+        self.tree.column("total", width=150, anchor="e")
+        self.tree.column("cantidad", width=100, anchor="center")
 
-        self.tree.column("mesero", width=260, anchor="w")
-        self.tree.column("total", width=120, anchor="e")
-        self.tree.column("num", width=120, anchor="center")
-
-        self.tree.pack(fill="both", expand=True)
-
-    def _on_mesero_selected(self, value: str):
-        # Usa el nombre del menu como snapshot
-        return
+        scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=scroller.set)
+        
+        self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
+        scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
 
     def _load_meseros(self):
         try:
-            res = (
-                self.db.client.table("meseros")
-                .select("id, nombre")
-                .eq("activo", True)
-                .order("nombre")
-                .execute()
-            )
-            data = res.data or []
-        except Exception:
-            data = []
+            meseros_db = self.db.listar_meseros()
+            active_names = []
+            self.mesero_map = {}
+            for m in meseros_db:
+                if m.get("activo"):
+                    name = m.get("nombre", "Sin Nombre")
+                    mid = m.get("id")
+                    active_names.append(name)
+                    self.mesero_map[name] = mid
+            
+            if active_names:
+                self.menu_mesero.configure(values=active_names)
+                self.mesero_var.set(active_names[0])
+            else:
+                self.menu_mesero.configure(values=["No hay meseros activos"])
+        except Exception as e:
+            print(f"Error cargando meseros: {e}")
 
-        self.mesero_map.clear()
-        names = []
-        for m in data:
-            nombre = (m.get("nombre") or "").strip()
-            mid = m.get("id")
-            if not nombre or not mid:
-                continue
-            self.mesero_map[nombre] = mid
-            names.append(nombre)
-
-        values = names
-        self.mesero_menu.configure(values=values)
-        if values:
-            self.mesero_var.set(values[0])
-            self._on_mesero_selected(values[0])
-
-    def _guardar_propina(self):
-        monto_txt = self.monto_var.get().strip()
-        try:
-            monto = float(monto_txt)
-            if monto <= 0:
-                raise ValueError
-        except Exception:
-            messagebox.showwarning("Monto invalido", "El monto debe ser un numero > 0.")
+    def _guardar(self):
+        mesero_name = self.mesero_var.get()
+        monto_str = self.monto_var.get().strip()
+        
+        if mesero_name not in self.mesero_map:
+            messagebox.showwarning("Error", "Selecciona un mesero valido.")
             return
+            
+        mesero_id = self.mesero_map[mesero_name]
 
-        sel = self.mesero_var.get()
-        mesero_id = self.mesero_map.get(sel)
-        mesero_name = sel or None
-        if not mesero_name:
-            messagebox.showwarning("Falta mesero", "Selecciona un mesero.")
+        try:
+            monto = float(monto_str)
+            if monto <= 0: raise ValueError
+        except:
+            messagebox.showwarning("Monto", "Ingresa un monto valido mayor a 0.")
             return
 
         try:
@@ -162,42 +150,27 @@ class PropinasDialog(ctk.CTkToplevel):
                 mesero_id=mesero_id,
                 mesero_nombre_snapshot=mesero_name,
                 fuente="MANUAL",
-                comanda_id=None,
+                comanda_id=None
             )
             self.monto_var.set("")
             self._load_reporte()
-            messagebox.showinfo("OK", "Propina guardada.")
+            messagebox.showinfo("Exito", f"Propina de ${monto:.2f} registrada para {mesero_name}.")
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar la propina:\n{e}")
+            messagebox.showerror("Error", f"No se pudo guardar:\n{e}")
 
     def _load_reporte(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
-
         try:
-            year = int(self.year_var.get())
-            month = int(self.month_var.get())
-        except Exception:
-            messagebox.showwarning("Fecha invalida", "Selecciona un ano y mes validos.")
-            return
-
-        try:
-            rows = self.db.reporte_propinas_mes(year, month)
+            y = int(self.year_var.get())
+            m = int(self.month_var.get())
+            rows = self.db.reporte_propinas_mes(y, m)
+            
+            for r in rows:
+                self.tree.insert("", "end", values=(
+                    r.get("mesero") or "Desconocido",
+                    f"${float(r.get('total_propinas') or 0):.2f}",
+                    r.get("num_propinas")
+                ))
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo cargar el reporte:\n{e}")
-            return
-
-        for r in rows:
-            mesero = r.get("mesero") or "Sin nombre"
-            total = float(r.get("total_propinas") or 0)
-            num = int(r.get("num_propinas") or 0)
-            self.tree.insert("", "end", values=(mesero, f"${total:.2f}", num))
-
-
-if __name__ == "__main__":
-    ctk.set_appearance_mode("light")
-    root = ctk.CTk()
-    root.withdraw()
-    db = SupabaseService()
-    dlg = PropinasDialog(root, db)
-    dlg.mainloop()
+            print(f"Error reporte propinas: {e}")
