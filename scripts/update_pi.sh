@@ -15,7 +15,7 @@ append_env() {
 
 if [ -f "${ENV_FILE}" ]; then
   append_env "BARBACOA_PRINTER_DEVICE" "/dev/usb/lp0"
-  append_env "BARBACOA_PRINTER_AUTOPRINT" "true"
+  append_env "BARBACOA_PRINTER_AUTOPRINT" "false"
 else
   echo "WARN: .env not found; skipping printer defaults."
 fi
