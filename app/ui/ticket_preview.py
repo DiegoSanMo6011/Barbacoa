@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import customtkinter as ctk
 
+from services.printer import print_ticket_text
 
 class TicketPreview(ctk.CTkToplevel):
     def __init__(self, master, ticket_text: str, file_path: str | None = None):
@@ -12,6 +13,7 @@ class TicketPreview(ctk.CTkToplevel):
         self.geometry("420x520")
         self.resizable(False, False)
         self.grab_set()
+        self.ticket_text = ticket_text
 
         header = ctk.CTkFrame(self)
         header.pack(fill="x", padx=12, pady=12)
@@ -26,6 +28,7 @@ class TicketPreview(ctk.CTkToplevel):
 
         actions = ctk.CTkFrame(self, fg_color="transparent")
         actions.pack(fill="x", padx=12, pady=(0, 12))
+        ttk.Button(actions, text="Imprimir", command=self._print_ticket).pack(side="left", padx=6)
         if file_path:
             ttk.Button(actions, text="Ruta del archivo", command=lambda: self._show_path(file_path)).pack(
                 side="left", padx=6
@@ -34,3 +37,10 @@ class TicketPreview(ctk.CTkToplevel):
 
     def _show_path(self, path: str):
         messagebox.showinfo("Ticket guardado", f"Archivo: {path}")
+
+    def _print_ticket(self):
+        try:
+            print_ticket_text(self.ticket_text)
+            messagebox.showinfo("Impresión", "Ticket enviado a la impresora.")
+        except Exception as e:
+            messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}")

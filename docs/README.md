@@ -168,6 +168,7 @@ Funcionalidades actuales:
 - POS básico (comandas + pagos)
 - Conexión Supabase
 - Autoinicio Raspberry
+- Impresión de tickets (USB / ESC-POS)
 
 Próximas mejoras:
 - Registro de propinas por mesero
@@ -175,7 +176,6 @@ Próximas mejoras:
 - Pantalla de cierre de caja
 - Dashboard de análisis de datos
 - Roles (mesero / admin)
-- Impresión de tickets
 
 ---
 

@@ -16,6 +16,7 @@ from ui.reportes_view import ReportesView
 from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
 from ui.ticket_preview import TicketPreview
+from services.printer import print_ticket_text, should_autoprint
 
 
 class POSApp(tk.Tk):
@@ -663,12 +664,13 @@ class POSApp(tk.Tk):
 
         try:
             result = self.db.guardar_comanda(mesero, metodo, total, recibido, cambio, self.items, propina)
-            ticket_path = self._create_ticket(result, mesero, metodo, total, propina)
+            ticket_path, ticket_text = self._create_ticket(result, mesero, metodo, total, propina)
             if result.get("offline"):
                 messagebox.showinfo("OK", f"Comanda guardada localmente.\nTotal: ${total:.2f}\nMétodo: {metodo}")
             else:
                 messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
-            self._show_ticket_preview(ticket_path)
+            self._maybe_print_ticket(ticket_text)
+            self._show_ticket_preview(ticket_text, ticket_path)
             # Cerrar comanda actual y abrir una nueva
             if self.active_comanda is not None:
                 self.comandas.pop(self.active_comanda)
@@ -722,7 +724,7 @@ class POSApp(tk.Tk):
         if not current and values:
             self.mesero_var.set(values[0])
 
-    def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> str:
+    def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
         folio = comanda.get("folio")
         ts = datetime.now()
         if not folio:
@@ -746,15 +748,18 @@ class POSApp(tk.Tk):
         filename = os.path.join(base, f"ticket_{folio}.txt")
         with open(filename, "w", encoding="utf-8") as f:
             f.write(ticket_text)
-        return filename
+        return filename, ticket_text
 
-    def _show_ticket_preview(self, ticket_path: str):
-        try:
-            with open(ticket_path, "r", encoding="utf-8") as f:
-                text = f.read()
-        except Exception:
+    def _maybe_print_ticket(self, ticket_text: str):
+        if not should_autoprint():
             return
-        TicketPreview(self, text, ticket_path)
+        try:
+            print_ticket_text(ticket_text)
+        except Exception as e:
+            messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}")
+
+    def _show_ticket_preview(self, ticket_text: str, ticket_path: str):
+        TicketPreview(self, ticket_text, ticket_path)
 
 
 if __name__ == "__main__":

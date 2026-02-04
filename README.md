@@ -151,6 +151,31 @@ El archivo se guarda en:
 exports/tickets/
 ```
 
+## 🖨️ Impresión de tickets (USB)
+
+1) Conecta la impresora POS-5890 por USB y enciéndela.
+2) Verifica el dispositivo:
+```
+ls /dev/usb/lp*
+```
+Si aparece, normalmente será `/dev/usb/lp0`.
+
+3) Configura `.env`:
+```env
+BARBACOA_PRINTER_DEVICE=/dev/usb/lp0
+BARBACOA_PRINTER_AUTOPRINT=true
+```
+
+4) Guarda una comanda y se imprimirá automáticamente.  
+También puedes usar el botón “Imprimir” en la vista previa del ticket.
+
+Si sale un error de permisos, agrega el usuario al grupo `lp` y reinicia sesión:
+```bash
+sudo usermod -aG lp $USER
+```
+
+Opcional: si usas CUPS, define `BARBACOA_PRINTER_NAME` y `BARBACOA_PRINTER_USE_CUPS=true`.
+
 ---
 
 ## 🖥️ Lanzador de escritorio (portable)
