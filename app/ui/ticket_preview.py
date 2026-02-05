@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import messagebox, ttk
+import threading
 import customtkinter as ctk
 
 from services.printer import print_ticket_text
@@ -39,8 +40,11 @@ class TicketPreview(ctk.CTkToplevel):
         messagebox.showinfo("Ticket guardado", f"Archivo: {path}")
 
     def _print_ticket(self):
-        try:
-            print_ticket_text(self.ticket_text)
-            messagebox.showinfo("Impresión", "Ticket enviado a la impresora.")
-        except Exception as e:
-            messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}")
+        def _job():
+            try:
+                print_ticket_text(self.ticket_text)
+                self.after(0, lambda: messagebox.showinfo("Impresión", "Ticket enviado a la impresora."))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}"))
+
+        threading.Thread(target=_job, daemon=True).start()

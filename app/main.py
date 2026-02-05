@@ -1,5 +1,8 @@
 import json
 import os
+import sys
+import logging
+import threading
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -22,6 +25,7 @@ from services.printer import print_ticket_text, should_autoprint
 class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        self.logger = logging.getLogger("barbacoa.pos")
         ctk.set_appearance_mode("light")
         self.title("Barbacoa POS")
         self.geometry("1100x700")
@@ -663,6 +667,7 @@ class POSApp(tk.Tk):
             cambio = recibido - total
 
         try:
+            self.logger.info("save_comanda:start metodo=%s total=%.2f mesero=%s", metodo, total, mesero)
             result = self.db.guardar_comanda(mesero, metodo, total, recibido, cambio, self.items, propina)
             ticket_path, ticket_text = self._create_ticket(result, mesero, metodo, total, propina)
             if result.get("offline"):
@@ -683,7 +688,9 @@ class POSApp(tk.Tk):
                     self._refresh_ticket()
             self._persist_comandas()
             self._new_comanda()
+            self.logger.info("save_comanda:done folio=%s", result.get("folio"))
         except Exception as e:
+            self.logger.exception("save_comanda:error")
             messagebox.showerror("Error", f"No se pudo guardar en Supabase:\n{e}")
 
     # ---------------- Dialogs ----------------
@@ -753,15 +760,41 @@ class POSApp(tk.Tk):
     def _maybe_print_ticket(self, ticket_text: str):
         if not should_autoprint():
             return
-        try:
-            print_ticket_text(ticket_text)
-        except Exception as e:
-            messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}")
+        def _job():
+            try:
+                self.logger.info("print_ticket:start")
+                print_ticket_text(ticket_text)
+                self.logger.info("print_ticket:done")
+            except Exception as e:
+                self.logger.exception("print_ticket:error")
+                self.after(0, lambda: messagebox.showerror("Impresión", f"No se pudo imprimir el ticket:\n{e}"))
+
+        threading.Thread(target=_job, daemon=True).start()
 
     def _show_ticket_preview(self, ticket_text: str, ticket_path: str):
         TicketPreview(self, ticket_text, ticket_path)
 
 
 if __name__ == "__main__":
+    def _setup_logging() -> None:
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "logs"))
+        os.makedirs(base, exist_ok=True)
+        logfile = os.path.join(base, "pos.log")
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            handlers=[logging.FileHandler(logfile, encoding="utf-8"), logging.StreamHandler(sys.stdout)],
+        )
+
+        def _excepthook(exc_type, exc, tb):
+            logging.getLogger("barbacoa.pos").exception("uncaught", exc_info=(exc_type, exc, tb))
+
+        sys.excepthook = _excepthook
+        if hasattr(threading, "excepthook"):
+            def _thread_excepthook(args):
+                logging.getLogger("barbacoa.pos").exception("thread_uncaught", exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+            threading.excepthook = _thread_excepthook
+
+    _setup_logging()
     app = POSApp()
     app.mainloop()

@@ -8,4 +8,5 @@ exports/
 app/data/comandas_abiertas.json
 app/data/offline.db
 app/data/backups/
+app/data/logs/
 data/
