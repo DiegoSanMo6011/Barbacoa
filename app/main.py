@@ -732,6 +732,18 @@ class POSApp(tk.Tk):
             self.mesero_var.set(values[0])
 
     def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
+        if not self._ticket_save_enabled():
+            return "", build_ticket_text({
+                "negocio": "Barbacoa de Mirand",
+                "folio": comanda.get("folio") or f"LOCAL-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "fecha_hora": datetime.now(),
+                "mesa": self.mesa_var.get().strip() if hasattr(self, "mesa_var") else "",
+                "mesero": mesero,
+                "metodo_pago": metodo,
+                "propina": propina or 0,
+                "total": total,
+                "items": list(self.items),
+            })
         folio = comanda.get("folio")
         ts = datetime.now()
         if not folio:
@@ -772,7 +784,21 @@ class POSApp(tk.Tk):
         threading.Thread(target=_job, daemon=True).start()
 
     def _show_ticket_preview(self, ticket_text: str, ticket_path: str):
-        TicketPreview(self, ticket_text, ticket_path)
+        if not self._ticket_preview_enabled():
+            return
+        TicketPreview(self, ticket_text, ticket_path if ticket_path else None)
+
+    def _ticket_preview_enabled(self) -> bool:
+        raw = os.getenv("BARBACOA_TICKET_PREVIEW")
+        if raw is None:
+            return True
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+    def _ticket_save_enabled(self) -> bool:
+        raw = os.getenv("BARBACOA_TICKET_SAVE")
+        if raw is None:
+            return True
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
     def _load_data_async(self):
