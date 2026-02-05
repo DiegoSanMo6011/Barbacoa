@@ -136,6 +136,47 @@ cat ~/barbacoa_pos/pos_autostart.log
 
 ---
 
+## 7.1) Impresora térmica (ESC/POS) vía CUPS
+
+Configuración recomendada para impresora USB (ej. POS-58 / YICHIP3121):
+
+1) Instalar CUPS y permisos:
+```bash
+sudo apt-get update
+sudo apt-get install -y cups
+sudo usermod -aG lpadmin adminbbq
+sudo usermod -aG lp adminbbq
+sudo systemctl enable --now cups
+```
+
+2) Abrir CUPS en el navegador:
+```
+http://localhost:631
+```
+
+3) Agregar impresora:
+- **Administration → Add Printer**
+- Selecciona el dispositivo USB o usa el URI de `lpinfo -v`.
+- **Make:** Generic
+- **Model:** Generic Text-Only Printer (en)
+- Anota el nombre (ej. `velazquez`)
+
+4) Configurar `.env`:
+```env
+BARBACOA_PRINTER_USE_CUPS=true
+BARBACOA_PRINTER_NAME=velazquez
+BARBACOA_PRINTER_AUTOPRINT=true
+```
+
+5) Probar impresión manual desde el ticket. Si funciona, deja autoprint activado.
+
+## 7.2) Nota sobre estabilidad gráfica (Raspberry)
+
+Para mayor estabilidad con Tkinter, usa **sesión X11** (no Wayland).
+- En el login, selecciona “Raspberry Pi OS (X11)”.
+
+---
+
 ## 8) Estructura del proyecto
 
 ```
