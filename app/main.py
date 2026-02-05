@@ -775,6 +775,20 @@ class POSApp(tk.Tk):
         TicketPreview(self, ticket_text, ticket_path)
 
 
+    def _load_data_async(self):
+        # Creamos un hilo para que no bloquee el renderizado
+        def task():
+            try:
+                # La petición pesada ocurre aquí (background)
+                data = self.db.get_productos()
+                # Una vez que tenemos la data, actualizamos la UI en el hilo principal
+                self.after(0, lambda: self._update_ui_with_data(data))
+            except Exception as e:
+                print(f"Error en el hyperespacio: {e}")
+
+        threading.Thread(target=task, daemon=True).start()
+
+
 if __name__ == "__main__":
     def _setup_logging() -> None:
         base = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "logs"))
