@@ -7,6 +7,7 @@ Se usa herencia para reutilizar operaciones basicas.
 from __future__ import annotations
 
 from abc import ABC
+from datetime import datetime, timezone
 from typing import Any
 
 from domain.models import (
@@ -17,6 +18,7 @@ from domain.models import (
     Mesero,
     Producto,
     Propina,
+    Usuario,
 )
 
 
@@ -162,3 +164,156 @@ class CierresRepository(SupabaseTable):
 
     def create(self, cierre: CierreCaja) -> dict:
         return self._insert_one(cierre.to_record())
+
+
+class UsuariosRepository(SupabaseTable):
+    table_name = "usuarios"
+
+    @staticmethod
+    def _normalize_role(role: str) -> str:
+        normalized = (role or "").strip().upper()
+        if normalized == "ADMIN":
+            return "DUENIO"
+        if normalized not in {"GERENTE", "DUENIO"}:
+            raise ValueError(f"rol invalido: {role}")
+        return normalized
+
+    @staticmethod
+    def _utcnow_iso() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def get_by_role(self, role: str) -> Usuario | None:
+        role_norm = self._normalize_role(role)
+        roles = [role_norm]
+        if role_norm == "DUENIO":
+            roles.append("ADMIN")
+
+        if len(roles) == 1:
+            query = self._table().select("*").eq("rol", roles[0])
+        else:
+            query = self._table().select("*").in_("rol", roles)
+
+        rows = query.limit(1).execute().data or []
+        if not rows:
+            return None
+        return Usuario.from_record(rows[0])
+
+    def list_roles(self) -> list[Usuario]:
+        rows = (
+            self._table()
+            .select("*")
+            .in_("rol", ["GERENTE", "DUENIO", "ADMIN"])
+            .order("rol")
+            .execute()
+            .data
+            or []
+        )
+        by_role: dict[str, Usuario] = {}
+        for row in rows:
+            user = Usuario.from_record(row)
+            if user.rol not in by_role:
+                by_role[user.rol] = user
+        return [by_role[r] for r in ("GERENTE", "DUENIO") if r in by_role]
+
+    def set_role_pin(
+        self,
+        role: str,
+        password_hash: str,
+        *,
+        nombre: str | None = None,
+        usuario: str | None = None,
+        activo: bool | None = None,
+    ) -> Usuario:
+        role_norm = self._normalize_role(role)
+        existing = self.get_by_role(role_norm)
+
+        if existing:
+            payload = {
+                "password_hash": password_hash,
+                "updated_at": self._utcnow_iso(),
+            }
+            if nombre is not None:
+                payload["nombre"] = (nombre or "").strip()
+            if usuario is not None:
+                payload["usuario"] = (usuario or "").strip()
+            if activo is not None:
+                payload["activo"] = bool(activo)
+            updated = self._update_one(payload, "id", existing.id)
+            return Usuario.from_record(updated)
+
+        defaults = {
+            "GERENTE": ("Gerente", "GERENTE"),
+            "DUENIO": ("Duenio", "DUENIO"),
+        }
+        default_nombre, default_usuario = defaults[role_norm]
+        payload = {
+            "nombre": (nombre or default_nombre).strip(),
+            "usuario": (usuario or default_usuario).strip(),
+            "password_hash": password_hash,
+            "rol": role_norm,
+            "activo": True if role_norm == "DUENIO" else bool(activo if activo is not None else True),
+        }
+        created = self._insert_one(payload)
+        return Usuario.from_record(created)
+
+    def set_role_active(self, role: str, active: bool) -> Usuario:
+        role_norm = self._normalize_role(role)
+        if role_norm == "DUENIO" and not active:
+            raise ValueError("No se puede desactivar DUENIO")
+
+        existing = self.get_by_role(role_norm)
+        if not existing or not existing.id:
+            raise ValueError(f"No existe usuario para rol {role_norm}")
+
+        payload = {"activo": bool(active), "updated_at": self._utcnow_iso()}
+        updated = self._update_one(payload, "id", existing.id)
+        return Usuario.from_record(updated)
+
+    def migrate_admin_to_duenio(self) -> int:
+        now_iso = self._utcnow_iso()
+        admin_rows = (
+            self._table()
+            .select("id, nombre, usuario, password_hash, activo, updated_at")
+            .eq("rol", "ADMIN")
+            .execute()
+            .data
+            or []
+        )
+        if not admin_rows:
+            return 0
+
+        duenio_rows = (
+            self._table()
+            .select("id")
+            .eq("rol", "DUENIO")
+            .execute()
+            .data
+            or []
+        )
+
+        primary_admin = admin_rows[0]
+        if duenio_rows:
+            primary_duenio_id = duenio_rows[0].get("id")
+            if primary_duenio_id:
+                payload = {
+                    "nombre": primary_admin.get("nombre") or "Duenio",
+                    "usuario": primary_admin.get("usuario") or "DUENIO",
+                    "password_hash": primary_admin.get("password_hash") or "",
+                    "activo": bool(primary_admin.get("activo", True)),
+                    "updated_at": now_iso,
+                }
+                self._table().update(payload).eq("id", primary_duenio_id).execute()
+            for row in admin_rows:
+                rid = row.get("id")
+                if rid:
+                    self._table().delete().eq("id", rid).execute()
+            return len(admin_rows)
+
+        primary_admin_id = primary_admin.get("id")
+        if primary_admin_id:
+            self._table().update({"rol": "DUENIO", "updated_at": now_iso}).eq("id", primary_admin_id).execute()
+        for row in admin_rows[1:]:
+            rid = row.get("id")
+            if rid:
+                self._table().delete().eq("id", rid).execute()
+        return len(admin_rows)

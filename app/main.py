@@ -8,10 +8,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
 
+from domain.auth import Permission, Role
 from services.supabase_service import SupabaseService
+from services.auth_service import AuthService
 from domain.calc import calcular_subtotal, calcular_total
 from domain.ticket import build_ticket_text
 from ui.assets import load_logo
+from ui.auth_unlock_dialog import ask_unlock
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
 from ui.corte_view import CorteView
@@ -19,6 +22,8 @@ from ui.reportes_view import ReportesView
 from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
 from ui.ticket_preview import TicketPreview
+from ui.change_pin_dialog import ChangePinDialog
+from ui.usuarios_dialog import UsuariosDialog
 from services.printer import print_ticket_text, should_autoprint
 
 
@@ -50,7 +55,9 @@ class POSApp(tk.Tk):
         style.configure("Total.TLabel", font=("Arial", 18, "bold"))
 
         self.db = SupabaseService()
+        self.auth = AuthService(self.db)
         self.productos = self.db.get_productos()
+        self._meseros_activos: list[str] = []
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.comandas = []
@@ -60,8 +67,10 @@ class POSApp(tk.Tk):
         self._build_ui()
         self.after(100, lambda: self.mesero_menu.focus_set())
         self._load_comandas()
+        self._refresh_meseros_dropdown()
         self._refresh_catalog()
         self._bind_shortcuts()
+        self._apply_role_to_ui()
         self._tick_clock()
         self._sync_loop()
 
@@ -81,24 +90,50 @@ class POSApp(tk.Tk):
 
         center_top = tk.Frame(top, bg="#1f2937")
         center_top.pack(side="left", padx=16, pady=6)
-        ttk.Button(center_top, text="Gastos", command=self._open_gastos).pack(side="left", padx=4, pady=6)
-        ttk.Button(center_top, text="Propinas", command=self._open_propinas).pack(side="left", padx=4, pady=6)
-        ttk.Button(center_top, text="Personal", command=self._open_personal).pack(side="left", padx=4, pady=6)
-        ttk.Button(center_top, text="Productos", command=self._open_productos).pack(side="left", padx=4, pady=6)
-        ttk.Button(center_top, text="Corte", command=self._open_corte).pack(side="left", padx=4, pady=6)
-        ttk.Button(center_top, text="Reportes", command=self._open_reportes).pack(side="left", padx=4, pady=6)
+        self.btn_gastos = ttk.Button(center_top, text="Gastos", command=self._open_gastos)
+        self.btn_propinas = ttk.Button(center_top, text="Propinas", command=self._open_propinas)
+        self.btn_personal = ttk.Button(center_top, text="Personal", command=self._open_personal)
+        self.btn_productos = ttk.Button(center_top, text="Productos", command=self._open_productos)
+        self.btn_corte = ttk.Button(center_top, text="Corte", command=self._open_corte)
+        self.btn_reportes = ttk.Button(center_top, text="Reportes", command=self._open_reportes)
+        self.btn_usuarios = ttk.Button(center_top, text="Usuarios", command=self._open_usuarios)
+
+        self.btn_gastos.pack(side="left", padx=4, pady=6)
+        self.btn_propinas.pack(side="left", padx=4, pady=6)
+        self.btn_personal.pack(side="left", padx=4, pady=6)
+        self.btn_productos.pack(side="left", padx=4, pady=6)
+        self.btn_corte.pack(side="left", padx=4, pady=6)
+        self.btn_reportes.pack(side="left", padx=4, pady=6)
+        self._usuarios_btn_visible = False
 
         right_top = tk.Frame(top, bg="#1f2937")
         right_top.pack(side="right", padx=12, pady=6)
+        self.role_var = tk.StringVar(value="Rol: MESERO")
+        tk.Label(right_top, textvariable=self.role_var, fg="#fbbf24", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e")
+        self.btn_unlock = ttk.Button(right_top, text="Desbloquear", style="Accent.TButton", command=self._unlock_role)
+        self.btn_unlock.pack(anchor="e", pady=(2, 0))
+        self.btn_lock = ttk.Button(right_top, text="Bloquear", command=self._lock_role)
+        self.btn_lock.pack(anchor="e", pady=(2, 0))
+        self.btn_change_pin = ttk.Button(right_top, text="Cambiar PIN", command=self._open_change_pin)
+        self.btn_change_pin.pack(anchor="e", pady=(2, 0))
         tk.Label(right_top, text="Mesero", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e")
         self.mesero_var = tk.StringVar()
-        self.mesero_menu = ttk.Combobox(right_top, textvariable=self.mesero_var, state="normal", width=22)
+        self.mesero_menu = ttk.Combobox(right_top, textvariable=self.mesero_var, state="readonly", width=22)
         self.mesero_menu.pack(anchor="e", pady=(2, 0))
         self.mesero_menu.bind("<<ComboboxSelected>>", lambda _e: self._save_current_to_state())
         self.mesero_menu.bind("<Return>", lambda _e: self.search_entry.focus_set())
         self.mesero_menu.bind("<Button-1>", lambda _e: self._refresh_meseros_dropdown())
-        self.mesero_menu.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
         self._refresh_meseros_dropdown()
+        self.mesero_status_var = tk.StringVar(value="")
+        tk.Label(
+            right_top,
+            textvariable=self.mesero_status_var,
+            fg="#fca5a5",
+            bg="#1f2937",
+            font=("Arial", 9, "bold"),
+            justify="right",
+            wraplength=210,
+        ).pack(anchor="e", pady=(2, 0))
 
         tk.Label(right_top, text="Mesa", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e", pady=(6, 0))
         self.mesa_var = tk.StringVar()
@@ -275,7 +310,8 @@ class POSApp(tk.Tk):
 
         self._toggle_cash_fields()
 
-        ttk.Button(right, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda).pack(fill="x", pady=10)
+        self.save_btn = ttk.Button(right, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda)
+        self.save_btn.pack(fill="x", pady=10)
 
     # ---------------- Logic ----------------
     def _bind_shortcuts(self):
@@ -287,6 +323,46 @@ class POSApp(tk.Tk):
         self.bind_all("<Control-d>", lambda _e: self._remove_selected())
         self.bind_all("<Control-l>", lambda _e: self._clear_all())
         self.bind_all("<Control-q>", lambda _e: self._exit_app())
+
+    def _apply_role_to_ui(self):
+        role = self.auth.current_role()
+        self.role_var.set(f"Rol: {role.value}")
+        self.btn_lock.configure(state=("disabled" if role == Role.MESERO else "normal"))
+        self.btn_change_pin.configure(state=("disabled" if role == Role.MESERO else "normal"))
+
+        self.btn_gastos.configure(state=("normal" if self.auth.can(Permission.GASTOS) else "disabled"))
+        self.btn_propinas.configure(state=("normal" if self.auth.can(Permission.PROPINAS) else "disabled"))
+        self.btn_corte.configure(state=("normal" if self.auth.can(Permission.CORTE) else "disabled"))
+        self.btn_reportes.configure(state=("normal" if self.auth.can(Permission.REPORTES) else "disabled"))
+        self.btn_personal.configure(state=("normal" if self.auth.can(Permission.PERSONAL) else "disabled"))
+        self.btn_productos.configure(state=("normal" if self.auth.can(Permission.PRODUCTOS) else "disabled"))
+
+        can_users = self.auth.can(Permission.USUARIOS)
+        if can_users and not self._usuarios_btn_visible:
+            self.btn_usuarios.pack(side="left", padx=4, pady=6)
+            self._usuarios_btn_visible = True
+        if not can_users and self._usuarios_btn_visible:
+            self.btn_usuarios.pack_forget()
+            self._usuarios_btn_visible = False
+
+    def _unlock_role(self):
+        result = ask_unlock(self, self.auth)
+        if not result:
+            return
+        self._apply_role_to_ui()
+
+    def _lock_role(self):
+        self.auth.lock()
+        self._apply_role_to_ui()
+
+    def _ensure_permission(self, permission: Permission, action_label: str) -> bool:
+        if self.auth.can(permission):
+            return True
+        messagebox.showwarning(
+            "Sin permisos",
+            f"No tienes permisos para {action_label}.\nDesbloquea un perfil con privilegios.",
+        )
+        return False
 
     def _sync_loop(self):
         try:
@@ -633,11 +709,21 @@ class POSApp(tk.Tk):
         self.cambio_var.set(f"{(recibido - total):.2f}")
 
     def _save_comanda(self):
+        if not self._meseros_activos:
+            messagebox.showwarning(
+                "Meseros requeridos",
+                "No hay meseros activos.\nDesbloquea gerente/dueño para crear o activar personal.",
+            )
+            return
+
         if not self.items:
             messagebox.showwarning("Comanda vacía", "Agrega productos antes de guardar.")
             return
 
-        mesero = self.mesero_var.get().strip() or "Sin nombre"
+        mesero = self.mesero_var.get().strip()
+        if not mesero or mesero not in self._meseros_activos:
+            messagebox.showwarning("Mesero inválido", "Selecciona un mesero activo de la lista.")
+            return
         metodo = self.metodo_var.get()
         total = calcular_total(self.items)
 
@@ -695,27 +781,60 @@ class POSApp(tk.Tk):
 
     # ---------------- Dialogs ----------------
     def _open_gastos(self):
+        if not self._ensure_permission(Permission.GASTOS, "abrir Gastos"):
+            return
         GastosDialog(self, self.db)
 
     def _open_propinas(self):
+        if not self._ensure_permission(Permission.PROPINAS, "abrir Propinas"):
+            return
         PropinasDialog(self, self.db)
 
     def _open_corte(self):
-        CorteView(self, self.db)
+        if not self._ensure_permission(Permission.CORTE, "abrir Corte"):
+            return
+        dlg = CorteView(self, self.db, self.auth)
+        self.wait_window(dlg)
+        self._apply_role_to_ui()
 
     def _open_reportes(self):
+        if not self._ensure_permission(Permission.REPORTES, "abrir Reportes"):
+            return
         ReportesView(self, self.db)
 
     def _open_personal(self):
+        if not self._ensure_permission(Permission.PERSONAL, "abrir Personal"):
+            return
         dlg = PersonalDialog(self, self.db)
         self.wait_window(dlg)
         self._refresh_meseros_dropdown()
 
     def _open_productos(self):
+        if not self._ensure_permission(Permission.PRODUCTOS, "abrir Productos"):
+            return
         dlg = ProductosDialog(self, self.db)
         self.wait_window(dlg)
         self.productos = self.db.get_productos()
         self._refresh_catalog()
+
+    def _open_usuarios(self):
+        if not self._ensure_permission(Permission.USUARIOS, "abrir Usuarios"):
+            return
+        dlg = UsuariosDialog(self, self.db, self.auth)
+        self.wait_window(dlg)
+        self._apply_role_to_ui()
+
+    def _open_change_pin(self):
+        role = self.auth.current_role()
+        if role == Role.MESERO:
+            messagebox.showwarning(
+                "Sin perfil",
+                "Desbloquea GERENTE o DUEÑO para cambiar PIN.",
+            )
+            return
+        dlg = ChangePinDialog(self, self.db, self.auth, role)
+        self.wait_window(dlg)
+        self._apply_role_to_ui()
 
     def _refresh_meseros_dropdown(self):
         try:
@@ -724,12 +843,25 @@ class POSApp(tk.Tk):
         except Exception:
             nombres = []
         current = self.mesero_var.get().strip()
-        values = nombres
-        if current and current not in values:
-            values = [current] + values
-        self.mesero_menu.configure(values=values)
-        if not current and values:
-            self.mesero_var.set(values[0])
+        self._meseros_activos = nombres
+        self.mesero_menu.configure(values=nombres)
+        if current in nombres:
+            self.mesero_var.set(current)
+        elif nombres:
+            self.mesero_var.set(nombres[0])
+        else:
+            self.mesero_var.set("")
+        self._update_mesero_gate()
+
+    def _update_mesero_gate(self):
+        if not hasattr(self, "save_btn"):
+            return
+        if self._meseros_activos:
+            self.save_btn.configure(state="normal")
+            self.mesero_status_var.set("")
+            return
+        self.save_btn.configure(state="disabled")
+        self.mesero_status_var.set("Sin meseros activos. Desbloquea gerente/dueño para habilitar personal.")
 
     def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
         if not self._ticket_save_enabled():

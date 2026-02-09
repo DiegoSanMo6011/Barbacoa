@@ -16,8 +16,13 @@ def calc_ventas_por_metodo(rows: list[dict]) -> dict:
     return resumen
 
 
-def calc_efectivo_teorico(ventas_efectivo: float, gastos_total: float, propinas_total: float) -> float:
-    return _round2(float(ventas_efectivo) - float(gastos_total) - float(propinas_total))
+def calc_efectivo_teorico(
+    ventas_efectivo: float,
+    gastos_total: float,
+    propinas_total: float,
+    caja_chica_inicial: float = 0.0,
+) -> float:
+    return _round2(float(caja_chica_inicial) + float(ventas_efectivo) - float(gastos_total) - float(propinas_total))
 
 
 def calc_diferencia(efectivo_reportado: float, efectivo_teorico: float) -> float:

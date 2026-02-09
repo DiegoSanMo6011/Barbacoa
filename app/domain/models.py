@@ -134,6 +134,53 @@ class Mesero(RecordSerializable):
 
 
 @dataclass(slots=True)
+class Usuario(RecordSerializable):
+    id: str | None
+    nombre: str
+    usuario: str
+    password_hash: str
+    rol: str
+    activo: bool = True
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    @classmethod
+    def from_record(cls, data: dict) -> "Usuario":
+        rol = _clean_text(data.get("rol")).upper()
+        if rol == "ADMIN":
+            rol = "DUENIO"
+        return cls(
+            id=data.get("id"),
+            nombre=data.get("nombre") or "",
+            usuario=data.get("usuario") or "",
+            password_hash=data.get("password_hash") or "",
+            rol=rol or "GERENTE",
+            activo=bool(data.get("activo", True)),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+        )
+
+    def to_record(self) -> dict:
+        rol = _clean_text(self.rol).upper()
+        if rol == "ADMIN":
+            rol = "DUENIO"
+        record = {
+            "nombre": _clean_text(self.nombre),
+            "usuario": _clean_text(self.usuario),
+            "password_hash": _clean_text(self.password_hash),
+            "rol": rol,
+            "activo": bool(self.activo),
+        }
+        if self.id is not None:
+            record["id"] = self.id
+        if self.created_at:
+            record["created_at"] = self.created_at
+        if self.updated_at:
+            record["updated_at"] = self.updated_at
+        return record
+
+
+@dataclass(slots=True)
 class ComandaItem(RecordSerializable):
     producto_id: int
     nombre_snapshot: str

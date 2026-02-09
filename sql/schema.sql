@@ -8,10 +8,17 @@ CREATE TABLE public.cierres_caja (
   total_ventas numeric NOT NULL,
   total_gastos numeric NOT NULL,
   neto numeric NOT NULL,
+  caja_chica_inicial numeric NOT NULL DEFAULT 0::numeric,
   efectivo_reportado numeric NOT NULL,
   diferencia_efectivo numeric NOT NULL,
+  estado text NOT NULL DEFAULT 'CERRADO'::text CHECK (estado = ANY (ARRAY['ABIERTO'::text, 'CERRADO'::text])),
+  abierto_at timestamp with time zone NOT NULL DEFAULT now(),
+  cerrado_at timestamp with time zone,
+  reaperturas integer NOT NULL DEFAULT 0,
+  reabierto_at timestamp with time zone,
   notas text,
-  CONSTRAINT cierres_caja_pkey PRIMARY KEY (id)
+  CONSTRAINT cierres_caja_pkey PRIMARY KEY (id),
+  CONSTRAINT cierres_caja_fecha_unique UNIQUE (fecha)
 );
 
 CREATE TABLE public.comanda_items (
@@ -58,6 +65,20 @@ CREATE TABLE public.meseros (
   activo boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT meseros_pkey PRIMARY KEY (id)
+);
+
+-- Legacy: rows with rol='ADMIN' must be migrated to rol='DUENIO'.
+CREATE TABLE public.usuarios (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  nombre text NOT NULL,
+  usuario text NOT NULL,
+  password_hash text NOT NULL,
+  rol text NOT NULL CHECK (rol = ANY (ARRAY['GERENTE'::text, 'DUENIO'::text])),
+  activo boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT usuarios_pkey PRIMARY KEY (id),
+  CONSTRAINT usuarios_rol_unique UNIQUE (rol)
 );
 
 CREATE TABLE public.productos (

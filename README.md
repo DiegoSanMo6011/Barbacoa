@@ -79,10 +79,58 @@ Logo en `app/assets/`:
 - Comandas: multi‑comanda, edición rápida, atajos.
 - Gastos: registro y consulta diaria.
 - Propinas: registro y reporte mensual.
-- Corte: resumen diario con efectivo teórico.
+- Corte: resumen diario con caja chica inicial y efectivo esperado en caja.
 - Reportes: top productos, ventas por día, CSV.
 - Personal: alta/baja de meseros.
 - Productos: alta/edición de catálogo.
+
+## Roles y seguridad
+
+- El sistema inicia siempre en rol `MESERO` (sin login).
+- Para elevar permisos se usa **Desbloquear** con `ROL + PIN` (`GERENTE` o `DUENIO`).
+- Para regresar a modo base se usa **Bloquear**.
+- `MESERO`: flujo de comandas.
+- `GERENTE`: comandas + gastos + propinas + corte.
+- `DUENIO`: acceso total + personal + productos + usuarios/seguridad.
+- Si no hay meseros activos, no se permite guardar comandas hasta activar/crear personal con perfil privilegiado.
+- Solo `DUENIO` puede iniciar/cerrar/reabrir jornada de caja.
+- La reapertura de un día cerrado requiere confirmación de PIN de dueño.
+- `GERENTE` no tiene acceso a reportes.
+- `GERENTE` y `DUENIO` pueden cambiar su propio PIN desde la barra superior (botón `Cambiar PIN`).
+
+## Jornada de caja (ergonómico)
+
+1) **Iniciar día**: el dueño captura `caja_chica_inicial` y abre la jornada.  
+2) **Operar día**: el sistema calcula efectivo esperado en caja con:
+`caja_chica_inicial + ventas_efectivo - gastos - propinas`.  
+3) **Cerrar día**: el dueño captura efectivo contado y cierra la jornada.  
+4) **Reabrir por accidente**: solo dueño, confirmando PIN, puede reabrir/editar y volver a cerrar.
+
+Migración requerida en Supabase para jornada:
+- `sql/cierres_jornada.sql`
+
+## Seed inicial de roles
+
+Configura en `.env`:
+
+```env
+BARBACOA_GERENTE_PIN=1234
+BARBACOA_DUENIO_PIN=5678
+BARBACOA_AUTH_CACHE_TTL_HOURS=24
+```
+
+Ejecuta:
+
+```bash
+python scripts/seed_roles.py
+```
+
+El seed es idempotente y migra `ADMIN -> DUENIO` si detecta datos legacy.
+
+## Auth offline
+
+- Si Supabase no responde, el desbloqueo puede usar caché local en `app/data/auth_cache.json`.
+- El caché expira según `BARBACOA_AUTH_CACHE_TTL_HOURS` (default `24`).
 
 ## Modo offline (técnico)
 

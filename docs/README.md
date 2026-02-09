@@ -210,13 +210,51 @@ Funcionalidades actuales:
 - Conexión Supabase
 - Autoinicio Raspberry
 - Impresión de tickets (USB / ESC-POS)
+- Roles en app: `MESERO` (default), `GERENTE`, `DUENIO`
+- `GERENTE` sin acceso a Reportes (solo dueño)
+- Desbloqueo por `ROL + PIN` con caché offline temporal
+- Gestión de credenciales por rol (solo dueño)
+- Corte con `caja_chica_inicial` para cálculo exacto del efectivo esperado
+- Jornada de caja con estados `ABIERTO` / `CERRADO`
+- Reapertura de jornada cerrada solo para dueño con confirmación de PIN
+- Cambio de PIN disponible para el perfil autenticado (`GERENTE`/`DUENIO`)
+
+### Migración de jornada de caja
+
+Ejecutar en Supabase:
+
+```sql
+-- sql/cierres_jornada.sql
+```
+
+Incluye:
+- `caja_chica_inicial`
+- estado de jornada (`ABIERTO`/`CERRADO`)
+- metadatos de apertura/cierre/reaperturas
+- índice único por `fecha` para evitar duplicados
 
 Próximas mejoras:
-- Registro de propinas por mesero
-- Gestión de gastos
-- Pantalla de cierre de caja
 - Dashboard de análisis de datos
-- Roles (mesero / admin)
+- Auditoría y trazabilidad por usuario
+- Endurecer permisos con RLS en Supabase
+
+### Seed de credenciales por rol
+
+Agregar en `.env`:
+
+```env
+BARBACOA_GERENTE_PIN=1234
+BARBACOA_DUENIO_PIN=5678
+BARBACOA_AUTH_CACHE_TTL_HOURS=24
+```
+
+Ejecutar:
+
+```bash
+python scripts/seed_roles.py
+```
+
+Este script es idempotente y migra registros legacy `ADMIN` a `DUENIO`.
 
 ---
 

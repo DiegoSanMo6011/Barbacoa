@@ -31,6 +31,7 @@ from .repositories import (
     MeserosRepository,
     ProductosRepository,
     PropinasRepository,
+    UsuariosRepository,
 )
 from .settings import SUPABASE_KEY, SUPABASE_URL
 
@@ -55,6 +56,9 @@ class SupabaseService(OfflineSync):
         self.gastos_repo = GastosRepository(self.client)
         self.propinas_repo = PropinasRepository(self.client)
         self.cierres_repo = CierresRepository(self.client)
+        self.usuarios_repo = UsuariosRepository(self.client)
+
+        self._migrate_legacy_admin_role()
 
     # ---------------- Productos ----------------
     def get_productos(self) -> list[dict]:
@@ -393,6 +397,44 @@ class SupabaseService(OfflineSync):
             propina=payload.get("propina"),
         )
         self._insert_comanda(draft)
+
+    # ---------------- Usuarios / Roles ----------------
+    def _migrate_legacy_admin_role(self) -> None:
+        try:
+            self.usuarios_repo.migrate_admin_to_duenio()
+        except Exception:
+            # La tabla puede no existir aun o no tener permisos de update.
+            pass
+
+    def get_user_by_role(self, role: str) -> dict | None:
+        user = self.usuarios_repo.get_by_role(role)
+        return user.to_record() if user else None
+
+    def listar_usuarios_roles(self) -> list[dict]:
+        users = self.usuarios_repo.list_roles()
+        return [u.to_record() for u in users]
+
+    def set_role_pin(
+        self,
+        role: str,
+        password_hash: str,
+        *,
+        nombre: str | None = None,
+        usuario: str | None = None,
+    ) -> dict:
+        if not password_hash or not str(password_hash).strip():
+            raise ValueError("password_hash es obligatorio")
+        saved = self.usuarios_repo.set_role_pin(
+            role=role,
+            password_hash=str(password_hash).strip(),
+            nombre=nombre,
+            usuario=usuario,
+        )
+        return saved.to_record()
+
+    def set_role_active(self, role: str, active: bool) -> dict:
+        updated = self.usuarios_repo.set_role_active(role, bool(active))
+        return updated.to_record()
 
     # ---------------- Helpers ----------------
     def _day_range(self, fecha: date) -> tuple[str, str]:
