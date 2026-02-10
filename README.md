@@ -61,6 +61,9 @@ Editar `.env` con credenciales Supabase:
 ```env
 SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
+BARBACOA_UI_SCALE=1.1
+BARBACOA_UI_START_MODE=maximized
+BARBACOA_UI_OPEN_COMANDAS=collapsed
 ```
 
 4) Ejecutar
@@ -76,13 +79,19 @@ Logo en `app/assets/`:
 
 ## Módulos principales
 
-- Comandas: multi‑comanda, edición rápida, atajos.
+- Comandas: multi‑comanda, edición rápida, atajos y botones grandes para uso touch/teclado.
 - Gastos: registro y consulta diaria.
 - Propinas: registro y reporte mensual.
 - Corte: resumen diario con caja chica inicial y efectivo esperado en caja.
 - Reportes: top productos, ventas por día, CSV.
 - Personal: alta/baja de meseros.
 - Productos: alta/edición de catálogo.
+
+### UI recomendada para laptop rectangular
+
+- `BARBACOA_UI_START_MODE=maximized` para abrir grande sin forzar fullscreen.
+- `BARBACOA_UI_SCALE=1.1` como base recomendada para mejor lectura.
+- `BARBACOA_UI_OPEN_COMANDAS=collapsed` para priorizar catálogo y comanda al iniciar.
 
 ## Roles y seguridad
 
@@ -192,6 +201,7 @@ Al guardar una comanda se genera un ticket con:
 - Nombre del negocio, folio, fecha/hora
 - Mesa, mesero, método de pago, propina y total
 - Lista de productos
+- Bloque de facturación con datos solicitados (Nombre, RFC, CP, Régimen Fiscal, Correo, WhatsApp)
 - Mensaje de agradecimiento
 
 El archivo se guarda en:
