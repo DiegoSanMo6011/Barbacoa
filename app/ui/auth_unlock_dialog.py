@@ -31,7 +31,7 @@ class AuthUnlockDialog(ctk.CTkToplevel):
         self.header_text = header_text
         self.result: UnlockResult | None = None
 
-        default_role = fixed_role.value if fixed_role else Role.GERENTE.value
+        default_role = fixed_role.label if fixed_role else Role.GERENTE.label
         self.role_var = tk.StringVar(value=default_role)
         self.pin_var = tk.StringVar()
 
@@ -52,13 +52,13 @@ class AuthUnlockDialog(ctk.CTkToplevel):
 
         ctk.CTkLabel(form, text="Rol:", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=8, pady=8, sticky="w")
         if self.fixed_role:
-            ctk.CTkLabel(form, text=self.fixed_role.value, font=("Arial", 12, "bold")).grid(
+            ctk.CTkLabel(form, text=self.fixed_role.label, font=("Arial", 12, "bold")).grid(
                 row=0, column=1, padx=8, pady=8, sticky="w"
             )
         else:
             self.role_menu = ctk.CTkOptionMenu(
                 form,
-                values=[Role.GERENTE.value, Role.DUENIO.value],
+                values=[Role.GERENTE.label, Role.DUENIO.label],
                 variable=self.role_var,
                 width=220,
             )

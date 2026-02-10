@@ -27,7 +27,7 @@ class AuthService:
     """Control de acceso por rol para el POS.
 
     - Arranca siempre en MESERO.
-    - Eleva a GERENTE/DUENIO con PIN.
+    - Eleva a GERENTE/DUEÑO con PIN.
     - Si falla la red, intenta validacion local con cache temporal.
     """
 
@@ -105,10 +105,10 @@ class AuthService:
             return self._unlock_offline(role_obj, pin)
 
         if not user:
-            return UnlockResult(False, role_obj, "online", f"No existe usuario para rol {role_obj.value}")
+            return UnlockResult(False, role_obj, "online", f"No existe usuario para rol {role_obj.label}")
 
         if not bool(user.get("activo", True)):
-            return UnlockResult(False, role_obj, "online", f"Rol {role_obj.value} desactivado")
+            return UnlockResult(False, role_obj, "online", f"Rol {role_obj.label} desactivado")
 
         hash_value = str(user.get("password_hash") or "")
         if not self._verify_pin(pin, hash_value):
@@ -116,7 +116,7 @@ class AuthService:
 
         self._current_role = role_obj
         self._cache_online_success(role_obj, hash_value, active=True)
-        return UnlockResult(True, role_obj, "online", f"Sesion elevada a {role_obj.value}")
+        return UnlockResult(True, role_obj, "online", f"Sesion elevada a {role_obj.label}")
 
     def _unlock_offline(self, role: Role, pin: str) -> UnlockResult:
         data = self._load_cache()
@@ -131,7 +131,7 @@ class AuthService:
             )
 
         if not bool(entry.get("activo", True)):
-            return UnlockResult(False, role, "offline", f"Rol {role.value} desactivado en cache")
+            return UnlockResult(False, role, "offline", f"Rol {role.label} desactivado en cache")
 
         cached_at = self._parse_iso(entry.get("cached_at"))
         if not cached_at:
@@ -147,7 +147,7 @@ class AuthService:
             return UnlockResult(False, role, "offline", "PIN incorrecto")
 
         self._current_role = role
-        return UnlockResult(True, role, "offline", f"Sesion elevada a {role.value} (cache local)")
+        return UnlockResult(True, role, "offline", f"Sesion elevada a {role.label} (cache local)")
 
     def _cache_online_success(self, role: Role, password_hash: str, active: bool) -> None:
         data = self._load_cache()

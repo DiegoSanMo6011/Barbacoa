@@ -55,7 +55,7 @@ def _migrate_admin_to_duenio(client) -> int:
         if duenio_id:
             client.table("usuarios").update(
                 {
-                    "nombre": latest_admin.get("nombre") or "Duenio",
+                    "nombre": latest_admin.get("nombre") or "Dueño",
                     "usuario": latest_admin.get("usuario") or "DUENIO",
                     "password_hash": latest_admin.get("password_hash") or "",
                     "activo": bool(latest_admin.get("activo", True)),
@@ -132,14 +132,14 @@ def main() -> None:
         client,
         role="DUENIO",
         pin=duenio_pin,
-        nombre="Duenio",
+        nombre="Dueño",
         usuario="DUENIO",
         activo=True,
     )
 
-    print(f"ADMIN migrados a DUENIO: {migrated}")
+    print(f"ADMIN migrados a DUEÑO (rol interno DUENIO): {migrated}")
     print(f"GERENTE listo: {gerente}")
-    print(f"DUENIO listo: {duenio}")
+    print(f"DUEÑO listo (rol interno DUENIO): {duenio}")
 
 
 if __name__ == "__main__":

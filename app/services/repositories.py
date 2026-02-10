@@ -172,6 +172,8 @@ class UsuariosRepository(SupabaseTable):
     @staticmethod
     def _normalize_role(role: str) -> str:
         normalized = (role or "").strip().upper()
+        if normalized in {"DUEÑO", "DUENO"}:
+            normalized = "DUENIO"
         if normalized == "ADMIN":
             return "DUENIO"
         if normalized not in {"GERENTE", "DUENIO"}:
@@ -243,7 +245,7 @@ class UsuariosRepository(SupabaseTable):
 
         defaults = {
             "GERENTE": ("Gerente", "GERENTE"),
-            "DUENIO": ("Duenio", "DUENIO"),
+            "DUENIO": ("Dueño", "DUENIO"),
         }
         default_nombre, default_usuario = defaults[role_norm]
         payload = {
@@ -259,7 +261,7 @@ class UsuariosRepository(SupabaseTable):
     def set_role_active(self, role: str, active: bool) -> Usuario:
         role_norm = self._normalize_role(role)
         if role_norm == "DUENIO" and not active:
-            raise ValueError("No se puede desactivar DUENIO")
+            raise ValueError("No se puede desactivar DUEÑO")
 
         existing = self.get_by_role(role_norm)
         if not existing or not existing.id:
@@ -296,7 +298,7 @@ class UsuariosRepository(SupabaseTable):
             primary_duenio_id = duenio_rows[0].get("id")
             if primary_duenio_id:
                 payload = {
-                    "nombre": primary_admin.get("nombre") or "Duenio",
+                    "nombre": primary_admin.get("nombre") or "Dueño",
                     "usuario": primary_admin.get("usuario") or "DUENIO",
                     "password_hash": primary_admin.get("password_hash") or "",
                     "activo": bool(primary_admin.get("activo", True)),

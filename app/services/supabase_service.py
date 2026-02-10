@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
+import logging
 import os
+import threading
 
 from supabase import create_client
+from supabase.lib.client_options import ClientOptions
 
 from domain.models import (
     CierreCaja,
@@ -34,6 +37,7 @@ from .repositories import (
     UsuariosRepository,
 )
 from .settings import SUPABASE_KEY, SUPABASE_URL
+from .settings import SUPABASE_TIMEOUT_SECONDS
 
 
 class SupabaseService(OfflineSync):
@@ -45,9 +49,12 @@ class SupabaseService(OfflineSync):
     """
 
     def __init__(self) -> None:
-        self.client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        options = ClientOptions(postgrest_client_timeout=SUPABASE_TIMEOUT_SECONDS)
+        self.client = create_client(SUPABASE_URL, SUPABASE_KEY, options=options)
         base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         self.offline = OfflineStore(base_dir)
+        self._base_dir = base_dir
+        self._logger = logging.getLogger("barbacoa.pos.supabase")
 
         self.productos_repo = ProductosRepository(self.client)
         self.meseros_repo = MeserosRepository(self.client)
@@ -58,7 +65,7 @@ class SupabaseService(OfflineSync):
         self.cierres_repo = CierresRepository(self.client)
         self.usuarios_repo = UsuariosRepository(self.client)
 
-        self._migrate_legacy_admin_role()
+        self._start_legacy_role_migration_async()
 
     # ---------------- Productos ----------------
     def get_productos(self) -> list[dict]:
@@ -166,7 +173,7 @@ class SupabaseService(OfflineSync):
                 monto=draft.propina,
                 mesero_id=None,
                 mesero_nombre_snapshot=draft.mesero or "Sin nombre",
-                fuente="COMANDA",
+                fuente=draft.metodo_pago.value,
                 comanda_id=comanda["id"],
             )
             self.propinas_repo.create(propina)
@@ -234,7 +241,7 @@ class SupabaseService(OfflineSync):
         monto: float,
         mesero_id: str | None = None,
         mesero_nombre_snapshot: str | None = None,
-        fuente: str = "MANUAL",
+        fuente: str = "NO_ESPECIFICADO",
         comanda_id: str | None = None,
     ) -> dict:
         propina = Propina.from_inputs(
@@ -257,6 +264,62 @@ class SupabaseService(OfflineSync):
             raise ValueError("hasta debe ser >= desde")
         return self.propinas_repo.list_by_range(desde.isoformat(), hasta.isoformat())
 
+    def _aggregate_propinas_rows(self, rows: list[dict]) -> list[dict]:
+        agg: dict[str, dict] = {}
+        for r in rows:
+            mesero_id = r.get("mesero_id")
+            mesero_name = r.get("mesero_nombre_snapshot") or None
+            key = mesero_id or mesero_name or "SIN_NOMBRE"
+            label = mesero_name or mesero_id or "Sin nombre"
+            fuente = str(r.get("fuente") or "").strip().upper()
+            if fuente in {"MANUAL", "COMANDA", ""}:
+                fuente = "NO_ESPECIFICADO"
+            if fuente not in {"EFECTIVO", "TARJETA", "TRANSFER", "NO_ESPECIFICADO"}:
+                fuente = "NO_ESPECIFICADO"
+            monto = float(r.get("monto") or 0)
+
+            if key not in agg:
+                agg[key] = {
+                    "mesero": label,
+                    "total_propinas": 0.0,
+                    "num_propinas": 0,
+                    "num_tarjeta": 0,
+                    "total_tarjeta": 0.0,
+                    "num_efectivo": 0,
+                    "num_transfer": 0,
+                    "num_no_especificado": 0,
+                }
+
+            agg[key]["total_propinas"] += monto
+            agg[key]["num_propinas"] += 1
+            if fuente == "TARJETA":
+                agg[key]["num_tarjeta"] += 1
+                agg[key]["total_tarjeta"] += monto
+            elif fuente == "EFECTIVO":
+                agg[key]["num_efectivo"] += 1
+            elif fuente == "TRANSFER":
+                agg[key]["num_transfer"] += 1
+            else:
+                agg[key]["num_no_especificado"] += 1
+
+        result = list(agg.values())
+        result.sort(
+            key=lambda x: (
+                -x["num_tarjeta"],
+                -x["total_tarjeta"],
+                -x["total_propinas"],
+                x["mesero"],
+            )
+        )
+        return result
+
+    def reporte_propinas_dia(self, fecha: date) -> list[dict]:
+        if not isinstance(fecha, date):
+            raise ValueError("fecha debe ser date")
+        desde, hasta = self._day_range(fecha)
+        rows = self.propinas_repo.list_by_range(desde, hasta)
+        return self._aggregate_propinas_rows(rows)
+
     def reporte_propinas_mes(self, year: int, month: int) -> list[dict]:
         if month < 1 or month > 12:
             raise ValueError("month debe estar entre 1 y 12")
@@ -269,23 +332,7 @@ class SupabaseService(OfflineSync):
 
         hasta = hasta.replace(microsecond=0) - datetime.resolution
         rows = self.listar_propinas_rango(desde, hasta)
-
-        agg: dict[str, dict] = {}
-        for r in rows:
-            mesero_id = r.get("mesero_id")
-            mesero_name = r.get("mesero_nombre_snapshot") or None
-            key = mesero_id or mesero_name or "SIN_NOMBRE"
-            label = mesero_name or mesero_id or "Sin nombre"
-
-            if key not in agg:
-                agg[key] = {"mesero": label, "total_propinas": 0.0, "num_propinas": 0}
-
-            agg[key]["total_propinas"] += float(r.get("monto") or 0)
-            agg[key]["num_propinas"] += 1
-
-        result = list(agg.values())
-        result.sort(key=lambda x: (-x["total_propinas"], x["mesero"]))
-        return result
+        return self._aggregate_propinas_rows(rows)
 
     # ---------------- Cierre de caja ----------------
     def obtener_cierre(self, fecha: date) -> dict | None:
@@ -369,7 +416,7 @@ class SupabaseService(OfflineSync):
             monto=payload.get("monto", 0),
             mesero_id=payload.get("mesero_id"),
             mesero_nombre_snapshot=payload.get("mesero_nombre_snapshot"),
-            fuente=payload.get("fuente", "MANUAL"),
+            fuente=payload.get("fuente", "NO_ESPECIFICADO"),
             comanda_id=payload.get("comanda_id"),
         )
         self.propinas_repo.create(propina)
@@ -399,6 +446,40 @@ class SupabaseService(OfflineSync):
         self._insert_comanda(draft)
 
     # ---------------- Usuarios / Roles ----------------
+    def _start_legacy_role_migration_async(self) -> None:
+        if not self._should_run_legacy_role_migration():
+            return
+
+        def _job():
+            try:
+                self.usuarios_repo.migrate_admin_to_duenio()
+            except Exception:
+                # No bloquear arranque por migracion legacy.
+                self._logger.debug("legacy role migration skipped", exc_info=True)
+                return
+            self._mark_legacy_role_migration_ran()
+
+        threading.Thread(target=_job, daemon=True, name="legacy-role-migration").start()
+
+    def _legacy_role_migration_stamp_path(self) -> str:
+        return os.path.join(self._base_dir, "data", "last_legacy_role_migration.txt")
+
+    def _should_run_legacy_role_migration(self) -> bool:
+        path = self._legacy_role_migration_stamp_path()
+        today = date.today().isoformat()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                last = (f.read() or "").strip()
+            return last != today
+        except Exception:
+            return True
+
+    def _mark_legacy_role_migration_ran(self) -> None:
+        path = self._legacy_role_migration_stamp_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(date.today().isoformat())
+
     def _migrate_legacy_admin_role(self) -> None:
         try:
             self.usuarios_repo.migrate_admin_to_duenio()

@@ -97,7 +97,9 @@ CREATE TABLE public.propinas (
   mesero_id uuid,
   mesero_nombre_snapshot text,
   monto numeric NOT NULL,
-  fuente text NOT NULL DEFAULT 'MANUAL'::text,
+  fuente text NOT NULL DEFAULT 'NO_ESPECIFICADO'::text CHECK (
+    fuente = ANY (ARRAY['EFECTIVO'::text, 'TARJETA'::text, 'TRANSFER'::text, 'NO_ESPECIFICADO'::text])
+  ),
   comanda_id uuid,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT propinas_pkey PRIMARY KEY (id),

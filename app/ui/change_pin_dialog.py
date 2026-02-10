@@ -44,7 +44,7 @@ class ChangePinDialog(ctk.CTkToplevel):
         form.pack(fill="both", expand=True, padx=12, pady=12)
 
         ctk.CTkLabel(form, text="Perfil:", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=8, pady=8, sticky="w")
-        ctk.CTkLabel(form, text=self.role.value, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=8, pady=8, sticky="w")
+        ctk.CTkLabel(form, text=self.role.label, font=("Arial", 12, "bold")).grid(row=0, column=1, padx=8, pady=8, sticky="w")
 
         ctk.CTkLabel(form, text="PIN actual:", font=("Arial", 12, "bold")).grid(row=1, column=0, padx=8, pady=8, sticky="w")
         current_entry = ctk.CTkEntry(form, textvariable=self.current_pin_var, show="*", width=220)

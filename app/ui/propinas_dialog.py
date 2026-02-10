@@ -22,10 +22,10 @@ class PropinasDialog(ctk.CTkToplevel):
 
         self.monto_var = tk.StringVar()
         self.mesero_var = tk.StringVar()
+        self.fuente_var = tk.StringVar(value="TARJETA")
 
         today = date.today()
-        self.year_var = tk.StringVar(value=str(today.year))
-        self.month_var = tk.StringVar(value=str(today.month))
+        self.fecha_var = tk.StringVar(value=today.isoformat())
 
         self._build_ui()
         self._load_meseros()
@@ -58,28 +58,31 @@ class PropinasDialog(ctk.CTkToplevel):
         )
         self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
 
+        ctk.CTkLabel(sec_a, text="Origen:").grid(row=2, column=0, padx=6, pady=6, sticky="w")
+        self.origen_menu = ctk.CTkOptionMenu(
+            sec_a,
+            values=["TARJETA", "EFECTIVO", "TRANSFER", "NO_ESPECIFICADO"],
+            variable=self.fuente_var,
+            width=160,
+        )
+        self.origen_menu.grid(row=2, column=1, padx=6, pady=6, sticky="w")
 
         ttk.Button(sec_a, text="Guardar", style="Accent.TButton", command=self._guardar_propina).grid(
             row=2, column=3, padx=6, pady=6, sticky="e"
         )
 
-        # Section B: reporte mensual
+        # Section B: reporte diario
         sec_b = ctk.CTkFrame(self)
         sec_b.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
-        ctk.CTkLabel(sec_b, text="Reporte mensual", font=("Arial", 14, "bold")).grid(
+        ctk.CTkLabel(sec_b, text="Reporte diario", font=("Arial", 14, "bold")).grid(
             row=0, column=0, columnspan=5, padx=6, pady=(10, 6), sticky="w"
         )
 
-        ctk.CTkLabel(sec_b, text="Ano:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
-        years = [str(date.today().year - 1), str(date.today().year), str(date.today().year + 1)]
-        self.year_menu = ctk.CTkOptionMenu(sec_b, values=years, variable=self.year_var)
-        self.year_menu.grid(row=1, column=1, padx=6, pady=6, sticky="w")
-
-        ctk.CTkLabel(sec_b, text="Mes:").grid(row=1, column=2, padx=6, pady=6, sticky="w")
-        months = [str(m) for m in range(1, 13)]
-        self.month_menu = ctk.CTkOptionMenu(sec_b, values=months, variable=self.month_var)
-        self.month_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
+        ctk.CTkLabel(sec_b, text="Fecha (YYYY-MM-DD):").grid(row=1, column=0, padx=6, pady=6, sticky="w")
+        self.fecha_entry = ctk.CTkEntry(sec_b, textvariable=self.fecha_var, width=160)
+        self.fecha_entry.grid(row=1, column=1, padx=6, pady=6, sticky="w")
+        self.fecha_entry.bind("<Return>", lambda _e: self._load_reporte())
 
         ttk.Button(sec_b, text="Actualizar", command=self._load_reporte).grid(
             row=1, column=4, padx=6, pady=6, sticky="e"
@@ -92,15 +95,19 @@ class PropinasDialog(ctk.CTkToplevel):
 
         self.tree = ttk.Treeview(
             table_frame,
-            columns=("mesero", "total", "num"),
+            columns=("mesero", "tarjeta_num", "tarjeta_total", "total", "num"),
             show="headings",
             height=12,
         )
         self.tree.heading("mesero", text="Mesero")
+        self.tree.heading("tarjeta_num", text="#Tarjeta")
+        self.tree.heading("tarjeta_total", text="Total Tarjeta")
         self.tree.heading("total", text="Total")
         self.tree.heading("num", text="#Registros")
 
         self.tree.column("mesero", width=260, anchor="w")
+        self.tree.column("tarjeta_num", width=90, anchor="center")
+        self.tree.column("tarjeta_total", width=140, anchor="e")
         self.tree.column("total", width=120, anchor="e")
         self.tree.column("num", width=120, anchor="center")
 
@@ -161,10 +168,11 @@ class PropinasDialog(ctk.CTkToplevel):
                 monto=monto,
                 mesero_id=mesero_id,
                 mesero_nombre_snapshot=mesero_name,
-                fuente="MANUAL",
+                fuente=self.fuente_var.get().strip(),
                 comanda_id=None,
             )
             self.monto_var.set("")
+            self.fuente_var.set("TARJETA")
             self._load_reporte()
             messagebox.showinfo("OK", "Propina guardada.")
         except Exception as e:
@@ -175,14 +183,13 @@ class PropinasDialog(ctk.CTkToplevel):
             self.tree.delete(row)
 
         try:
-            year = int(self.year_var.get())
-            month = int(self.month_var.get())
+            fecha = date.fromisoformat(self.fecha_var.get().strip())
         except Exception:
-            messagebox.showwarning("Fecha invalida", "Selecciona un ano y mes validos.")
+            messagebox.showwarning("Fecha inválida", "Usa el formato YYYY-MM-DD.")
             return
 
         try:
-            rows = self.db.reporte_propinas_mes(year, month)
+            rows = self.db.reporte_propinas_dia(fecha)
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo cargar el reporte:\n{e}")
             return
@@ -191,7 +198,13 @@ class PropinasDialog(ctk.CTkToplevel):
             mesero = r.get("mesero") or "Sin nombre"
             total = float(r.get("total_propinas") or 0)
             num = int(r.get("num_propinas") or 0)
-            self.tree.insert("", "end", values=(mesero, f"${total:.2f}", num))
+            num_tarjeta = int(r.get("num_tarjeta") or 0)
+            total_tarjeta = float(r.get("total_tarjeta") or 0)
+            self.tree.insert(
+                "",
+                "end",
+                values=(mesero, num_tarjeta, f"${total_tarjeta:.2f}", f"${total:.2f}", num),
+            )
 
 
 if __name__ == "__main__":

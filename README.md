@@ -64,6 +64,8 @@ SUPABASE_ANON_KEY=...
 BARBACOA_UI_SCALE=1.1
 BARBACOA_UI_START_MODE=maximized
 BARBACOA_UI_OPEN_COMANDAS=collapsed
+BARBACOA_SUPABASE_TIMEOUT_SECONDS=20
+BARBACOA_MESEROS_REFRESH_TTL_SECONDS=45
 ```
 
 4) Ejecutar
@@ -81,7 +83,7 @@ Logo en `app/assets/`:
 
 - Comandas: multi‑comanda, edición rápida, atajos y botones grandes para uso touch/teclado.
 - Gastos: registro y consulta diaria.
-- Propinas: registro y reporte mensual.
+- Propinas: registro y reporte diario por mesero.
 - Corte: resumen diario con caja chica inicial y efectivo esperado en caja.
 - Reportes: top productos, ventas por día, CSV.
 - Personal: alta/baja de meseros.
@@ -96,16 +98,16 @@ Logo en `app/assets/`:
 ## Roles y seguridad
 
 - El sistema inicia siempre en rol `MESERO` (sin login).
-- Para elevar permisos se usa **Desbloquear** con `ROL + PIN` (`GERENTE` o `DUENIO`).
+- Para elevar permisos se usa **Desbloquear** con `ROL + PIN` (`GERENTE` o `DUEÑO`).
 - Para regresar a modo base se usa **Bloquear**.
 - `MESERO`: flujo de comandas.
 - `GERENTE`: comandas + gastos + propinas + corte.
-- `DUENIO`: acceso total + personal + productos + usuarios/seguridad.
+- `DUEÑO`: acceso total + personal + productos + seguridad de PIN.
 - Si no hay meseros activos, no se permite guardar comandas hasta activar/crear personal con perfil privilegiado.
-- Solo `DUENIO` puede iniciar/cerrar/reabrir jornada de caja.
+- Solo `DUEÑO` puede iniciar/cerrar/reabrir jornada de caja.
 - La reapertura de un día cerrado requiere confirmación de PIN de dueño.
 - `GERENTE` no tiene acceso a reportes.
-- `GERENTE` y `DUENIO` pueden cambiar su propio PIN desde la barra superior (botón `Cambiar PIN`).
+- `GERENTE` y `DUEÑO` pueden cambiar su propio PIN desde la barra superior (botón `Cambiar PIN`).
 
 ## Jornada de caja (ergonómico)
 
@@ -117,6 +119,9 @@ Logo en `app/assets/`:
 
 Migración requerida en Supabase para jornada:
 - `sql/cierres_jornada.sql`
+
+Migración recomendada para origen de propinas por método:
+- `sql/propinas_origen_metodo.sql`
 
 ## Seed inicial de roles
 
@@ -134,7 +139,7 @@ Ejecuta:
 python scripts/seed_roles.py
 ```
 
-El seed es idempotente y migra `ADMIN -> DUENIO` si detecta datos legacy.
+El seed es idempotente y migra `ADMIN -> DUENIO` (rol mostrado como `DUEÑO`) si detecta datos legacy.
 
 ## Auth offline
 
@@ -177,7 +182,7 @@ Ejecutar manual:
 
 3) Propinas
 - Registrar 2 propinas manuales además de las de comandas.
-- Verificar que se guarden sin error.
+- Verificar que se guarden sin error y aparezcan en el reporte diario.
 
 4) Corte
 - Abrir Corte y verificar ventas por método, gastos y propinas.

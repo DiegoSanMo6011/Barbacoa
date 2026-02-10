@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 import threading
+import time as pytime
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -23,7 +24,6 @@ from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
 from ui.ticket_preview import TicketPreview
 from ui.change_pin_dialog import ChangePinDialog
-from ui.usuarios_dialog import UsuariosDialog
 from services.printer import print_ticket_text, should_autoprint
 
 
@@ -116,6 +116,9 @@ class POSApp(tk.Tk):
         self.auth = AuthService(self.db)
         self.productos = self.db.get_productos()
         self._meseros_activos: list[str] = []
+        self._meseros_last_refresh_at = 0.0
+        self._meseros_refresh_ttl_s = self._load_meseros_refresh_ttl()
+        self._sync_in_progress = False
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.filtered = []
@@ -126,7 +129,7 @@ class POSApp(tk.Tk):
         self._build_ui()
         self.after(100, lambda: self.mesero_menu.focus_set())
         self._load_comandas()
-        self._refresh_meseros_dropdown()
+        self._refresh_meseros_dropdown(force=True)
         self._refresh_catalog()
         self._bind_shortcuts()
         self._apply_role_to_ui()
@@ -152,6 +155,14 @@ class POSApp(tk.Tk):
         if raw not in {"collapsed", "visible"}:
             return "collapsed"
         return raw
+
+    def _load_meseros_refresh_ttl(self) -> float:
+        raw = (os.getenv("BARBACOA_MESEROS_REFRESH_TTL_SECONDS") or "45").strip()
+        try:
+            value = float(raw)
+        except Exception:
+            return 45.0
+        return max(5.0, min(value, 300.0))
 
     def _configure_window_mode(self) -> None:
         self.geometry("1366x768")
@@ -290,7 +301,6 @@ class POSApp(tk.Tk):
         self._add_more_menu_item("productos", "Productos", self._open_productos)
         self._add_more_menu_item("corte", "Corte", self._open_corte)
         self._add_more_menu_item("reportes", "Reportes", self._open_reportes)
-        self._add_more_menu_item("usuarios", "Usuarios", self._open_usuarios)
         self.more_menu.add_separator()
         self._add_more_menu_item("change_pin", "Cambiar PIN", self._open_change_pin)
         self.btn_more.configure(menu=self.more_menu)
@@ -530,7 +540,7 @@ class POSApp(tk.Tk):
 
     def _apply_role_to_ui(self):
         role = self.auth.current_role()
-        self.role_var.set(f"Rol: {role.value}")
+        self.role_var.set(f"Rol: {role.label}")
         self.btn_lock.configure(state=("disabled" if role == Role.MESERO else "normal"))
 
         menu_permissions = {
@@ -540,7 +550,6 @@ class POSApp(tk.Tk):
             "reportes": self.auth.can(Permission.REPORTES),
             "personal": self.auth.can(Permission.PERSONAL),
             "productos": self.auth.can(Permission.PRODUCTOS),
-            "usuarios": self.auth.can(Permission.USUARIOS),
         }
         for key, enabled in menu_permissions.items():
             idx = self._more_menu_indexes.get(key)
@@ -574,12 +583,29 @@ class POSApp(tk.Tk):
         return False
 
     def _sync_loop(self):
-        try:
-            self.db.sync_offline()
-            self.db.offline.daily_backup(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-        except Exception:
-            pass
+        if self._sync_in_progress:
+            return
+
+        self._sync_in_progress = True
+        root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+        def _job():
+            try:
+                self.db.sync_offline()
+                self.db.offline.daily_backup(root_dir)
+            except Exception:
+                pass
+            try:
+                self.after(0, self._finish_sync_loop)
+            except Exception:
+                pass
+
+        threading.Thread(target=_job, daemon=True, name="offline-sync").start()
+
+    def _finish_sync_loop(self):
+        self._sync_in_progress = False
         self.after(30000, self._sync_loop)
+
     def _exit_app(self):
         if messagebox.askyesno("Salir", "¿Cerrar el POS?"):
             self.destroy()
@@ -1172,7 +1198,7 @@ class POSApp(tk.Tk):
             return
         dlg = PersonalDialog(self, self.db)
         self.wait_window(dlg)
-        self._refresh_meseros_dropdown()
+        self._refresh_meseros_dropdown(force=True)
 
     def _open_productos(self):
         if not self._ensure_permission(Permission.PRODUCTOS, "abrir Productos"):
@@ -1181,13 +1207,6 @@ class POSApp(tk.Tk):
         self.wait_window(dlg)
         self.productos = self.db.get_productos()
         self._refresh_catalog()
-
-    def _open_usuarios(self):
-        if not self._ensure_permission(Permission.USUARIOS, "abrir Usuarios"):
-            return
-        dlg = UsuariosDialog(self, self.db, self.auth)
-        self.wait_window(dlg)
-        self._apply_role_to_ui()
 
     def _open_change_pin(self):
         role = self.auth.current_role()
@@ -1201,12 +1220,20 @@ class POSApp(tk.Tk):
         self.wait_window(dlg)
         self._apply_role_to_ui()
 
-    def _refresh_meseros_dropdown(self):
+    def _refresh_meseros_dropdown(self, *, force: bool = False):
+        now = pytime.monotonic()
+        if (
+            not force
+            and self._meseros_activos
+            and (now - self._meseros_last_refresh_at) < self._meseros_refresh_ttl_s
+        ):
+            return
         try:
             meseros = self.db.listar_meseros_activos()
             nombres = [m.get("nombre") for m in meseros if m.get("nombre")]
+            self._meseros_last_refresh_at = now
         except Exception:
-            nombres = []
+            nombres = list(self._meseros_activos)
         current = self.mesero_var.get().strip()
         self._meseros_activos = nombres
         self.mesero_menu.configure(values=nombres)

@@ -23,7 +23,7 @@ class UsuariosDialog(ctk.CTkToplevel):
         self.db = supabase
         self.auth = auth
 
-        self.role_var = tk.StringVar(value=Role.GERENTE.value)
+        self.role_var = tk.StringVar(value=Role.GERENTE.label)
         self.pin_var = tk.StringVar()
         self.pin_confirm_var = tk.StringVar()
 
@@ -89,7 +89,7 @@ class UsuariosDialog(ctk.CTkToplevel):
         ctk.CTkLabel(form, text="Rol:").grid(row=1, column=0, padx=8, pady=6, sticky="w")
         ctk.CTkOptionMenu(
             form,
-            values=[Role.GERENTE.value, Role.DUENIO.value],
+            values=[Role.GERENTE.label, Role.DUENIO.label],
             variable=self.role_var,
             width=160,
         ).grid(row=1, column=1, padx=8, pady=6, sticky="w")
@@ -134,10 +134,14 @@ class UsuariosDialog(ctk.CTkToplevel):
             nombre = record.get("nombre") or "-"
             activo = "SI" if record.get("activo", False) else "NO"
             updated = (record.get("updated_at") or record.get("created_at") or "-").replace("T", " ")[:19]
-            self.tree.insert("", "end", iid=role, values=(role, usuario, nombre, activo, updated))
+            self.tree.insert("", "end", iid=role, values=(Role.from_raw(role).label, usuario, nombre, activo, updated))
 
     def _save_pin(self):
-        role = self.role_var.get().strip().upper()
+        role_raw = self.role_var.get().strip()
+        try:
+            role = Role.from_raw(role_raw).value
+        except Exception:
+            role = ""
         pin = self.pin_var.get().strip()
         pin_confirm = self.pin_confirm_var.get().strip()
 
@@ -165,7 +169,7 @@ class UsuariosDialog(ctk.CTkToplevel):
         self.pin_var.set("")
         self.pin_confirm_var.set("")
         self._load_roles()
-        messagebox.showinfo("OK", f"PIN actualizado para {role}.")
+        messagebox.showinfo("OK", f"PIN actualizado para {Role.from_raw(role).label}.")
 
     def _toggle_gerente(self):
         record = self._records.get(Role.GERENTE.value) or {}

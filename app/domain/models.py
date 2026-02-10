@@ -51,6 +51,23 @@ class MetodoPago(str, Enum):
             raise ValueError(f"metodo_pago invalido: {value}") from exc
 
 
+_PROPINA_ORIGENES_VALIDOS = {
+    MetodoPago.EFECTIVO.value,
+    MetodoPago.TARJETA.value,
+    MetodoPago.TRANSFER.value,
+    "NO_ESPECIFICADO",
+}
+
+
+def _normalize_propina_fuente(value: str | None) -> str:
+    fuente = _clean_text(value).upper()
+    if fuente in {"", "MANUAL", "COMANDA"}:
+        return "NO_ESPECIFICADO"
+    if fuente in _PROPINA_ORIGENES_VALIDOS:
+        return fuente
+    return "NO_ESPECIFICADO"
+
+
 @dataclass(slots=True)
 class Producto(RecordSerializable):
     id: int | None
@@ -323,7 +340,7 @@ class Gasto(MovimientoCaja):
 class Propina(MovimientoCaja):
     mesero_id: str | None = None
     mesero_nombre_snapshot: str | None = None
-    fuente: str = "MANUAL"
+    fuente: str = "NO_ESPECIFICADO"
     comanda_id: str | None = None
 
     @classmethod
@@ -332,12 +349,12 @@ class Propina(MovimientoCaja):
         monto: float,
         mesero_id: str | None = None,
         mesero_nombre_snapshot: str | None = None,
-        fuente: str = "MANUAL",
+        fuente: str = "NO_ESPECIFICADO",
         comanda_id: str | None = None,
     ) -> "Propina":
         if monto is None or float(monto) < 0:
             raise ValueError("monto debe ser >= 0")
-        fuente_limpia = _clean_text(fuente) or "MANUAL"
+        fuente_limpia = _normalize_propina_fuente(fuente)
         nombre = _clean_text(mesero_nombre_snapshot) if mesero_nombre_snapshot else None
         return cls(
             monto=_round2(float(monto)),
@@ -354,7 +371,7 @@ class Propina(MovimientoCaja):
             "mesero_nombre_snapshot": _clean_text(self.mesero_nombre_snapshot)
             if self.mesero_nombre_snapshot
             else None,
-            "fuente": _clean_text(self.fuente) or "MANUAL",
+            "fuente": _normalize_propina_fuente(self.fuente),
             "comanda_id": self.comanda_id,
         }
 

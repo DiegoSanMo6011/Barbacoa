@@ -8,11 +8,19 @@ class Role(str, Enum):
     GERENTE = "GERENTE"
     DUENIO = "DUENIO"
 
+    @property
+    def label(self) -> str:
+        if self == Role.DUENIO:
+            return "DUEÑO"
+        return self.value
+
     @classmethod
     def from_raw(cls, value: str | "Role") -> "Role":
         if isinstance(value, Role):
             return value
         normalized = (value or "").strip().upper()
+        if normalized in {"DUEÑO", "DUENO"}:
+            normalized = "DUENIO"
         if normalized == "ADMIN":
             normalized = "DUENIO"
         try:
