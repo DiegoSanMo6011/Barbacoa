@@ -42,7 +42,7 @@ class POSApp(tk.Tk):
         except tk.TclError:
             pass
 
-        self.title("Barbacoa POS")
+        self.title("Autonoma POS")
         self._configure_window_mode()
         self.bind("<Escape>", lambda _e: self._exit_fullscreen())
 
