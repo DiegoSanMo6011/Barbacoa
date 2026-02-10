@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime
+from textwrap import wrap
 
 
-def _line(char: str = "-", n: int = 32) -> str:
+TICKET_WIDTH = 32
+
+
+def _line(char: str = "-", n: int = TICKET_WIDTH) -> str:
     return char * n
+
+
+def _extend_wrapped(lines: list[str], text: str, width: int = TICKET_WIDTH) -> None:
+    wrapped = wrap(text, width=width, break_long_words=False, break_on_hyphens=False)
+    if not wrapped:
+        lines.append("")
+        return
+    lines.extend(wrapped)
 
 
 def build_ticket_text(payload: dict) -> str:
@@ -45,6 +57,19 @@ def build_ticket_text(payload: dict) -> str:
     lines.append(f"Metodo: {metodo}")
     lines.append(f"Propina: ${propina:.2f}")
     lines.append(f"TOTAL:   ${total:.2f}")
+    lines.append(_line())
+    lines.append("FACTURACION")
+    lines.append(_line())
+    _extend_wrapped(lines, "Para facturar requerimos que nos mande la foto de este ticket.")
+    lines.append("")
+    _extend_wrapped(lines, "Datos necesarios para el envio de su factura:")
+    lines.append("Nombre\n")
+    lines.append("RFC\n")
+    lines.append("CP\n")
+    lines.append("REGIMEN FISCAL\n")
+    lines.append("CORREO ELECTRONICO\n")
+    lines.append("")
+    _extend_wrapped(lines, "Mandar los datos al WhatsApp 4423536786")
     lines.append(_line("="))
     lines.append("Gracias por su compra")
     return "\n".join(lines)

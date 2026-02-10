@@ -31,11 +31,20 @@ class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.logger = logging.getLogger("barbacoa.pos")
+        self.ui_scale = self._load_ui_scale()
+        self.ui_start_mode = self._load_ui_start_mode()
+        self.open_comandas_mode = self._load_open_comandas_mode()
         ctk.set_appearance_mode("light")
+        ctk.set_widget_scaling(self.ui_scale)
+        ctk.set_window_scaling(self.ui_scale)
+        try:
+            self.tk.call("tk", "scaling", max(1.0, self.ui_scale))
+        except tk.TclError:
+            pass
+
         self.title("Barbacoa POS")
-        self.geometry("1100x700")
-        self.attributes("-fullscreen", True)
-        self.bind("<Escape>", lambda _e: self.attributes("-fullscreen", False))
+        self._configure_window_mode()
+        self.bind("<Escape>", lambda _e: self._exit_fullscreen())
 
         # Estilo ttk (se ve pro)
         style = ttk.Style(self)
@@ -43,16 +52,65 @@ class POSApp(tk.Tk):
             style.theme_use("clam")
         except Exception:
             pass
-        style.configure("TButton", padding=8, font=("Arial", 10, "bold"))
-        style.configure("Accent.TButton", padding=10, font=("Arial", 11, "bold"), foreground="white", background="#1d4ed8")
+        self.option_add("*Font", f"Arial {self._ui_px(13)}")
+        style.configure(
+            "TButton",
+            padding=(self._ui_px(9), self._ui_px(7)),
+            font=("Arial", self._ui_px(13), "bold"),
+        )
+        style.configure(
+            "Accent.TButton",
+            padding=(self._ui_px(12), self._ui_px(8)),
+            font=("Arial", self._ui_px(14), "bold"),
+            foreground="white",
+            background="#1d4ed8",
+        )
         style.map("Accent.TButton", background=[("active", "#1e40af")])
-        style.configure("Danger.TButton", padding=8, font=("Arial", 10, "bold"), foreground="white", background="#dc2626")
+        style.configure(
+            "Danger.TButton",
+            padding=(self._ui_px(12), self._ui_px(8)),
+            font=("Arial", self._ui_px(14), "bold"),
+            foreground="white",
+            background="#dc2626",
+        )
         style.map("Danger.TButton", background=[("active", "#b91c1c")])
-        style.configure("Treeview.Heading", font=("Arial", 14, "bold"))
-        style.configure("Treeview", rowheight=44, font=("Arial", 14))
-        style.configure("Header.TLabel", font=("Arial", 18, "bold"))
-        style.configure("Section.TLabel", font=("Arial", 12, "bold"))
-        style.configure("Total.TLabel", font=("Arial", 18, "bold"))
+        style.configure(
+            "Touch.TButton",
+            padding=(self._ui_px(13), self._ui_px(9)),
+            font=("Arial", self._ui_px(14), "bold"),
+        )
+        style.configure(
+            "CatalogAdd.TButton",
+            padding=(self._ui_px(10), self._ui_px(8)),
+            font=("Arial", self._ui_px(14), "bold"),
+            foreground="white",
+            background="#16a34a",
+        )
+        style.map("CatalogAdd.TButton", background=[("active", "#15803d")])
+        style.configure(
+            "QtyMinus.TButton",
+            padding=(self._ui_px(8), self._ui_px(6)),
+            font=("Arial", self._ui_px(14), "bold"),
+            foreground="white",
+            background="#ef4444",
+        )
+        style.map("QtyMinus.TButton", background=[("active", "#dc2626")])
+        style.configure(
+            "QtyPlus.TButton",
+            padding=(self._ui_px(8), self._ui_px(6)),
+            font=("Arial", self._ui_px(14), "bold"),
+            foreground="white",
+            background="#16a34a",
+        )
+        style.map("QtyPlus.TButton", background=[("active", "#15803d")])
+        style.configure("TLabel", font=("Arial", self._ui_px(13)))
+        style.configure("TEntry", padding=(self._ui_px(7), self._ui_px(7)), font=("Arial", self._ui_px(13)))
+        style.configure("TCombobox", padding=(self._ui_px(7), self._ui_px(7)), font=("Arial", self._ui_px(13)))
+        style.configure("Treeview.Heading", font=("Arial", self._ui_px(18), "bold"))
+        style.configure("Treeview", rowheight=self._ui_px(54), font=("Arial", self._ui_px(17)))
+        style.configure("Header.TLabel", font=("Arial", self._ui_px(18), "bold"))
+        style.configure("Section.TLabel", font=("Arial", self._ui_px(14), "bold"))
+        style.configure("Total.TLabel", font=("Arial", self._ui_px(30), "bold"))
 
         self.db = SupabaseService()
         self.auth = AuthService(self.db)
@@ -60,6 +118,7 @@ class POSApp(tk.Tk):
         self._meseros_activos: list[str] = []
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
+        self.filtered = []
         self.comandas = []
         self.active_comanda = None
         self._comandas_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "comandas_abiertas.json"))
@@ -74,244 +133,386 @@ class POSApp(tk.Tk):
         self._tick_clock()
         self._sync_loop()
 
+    def _load_ui_scale(self) -> float:
+        raw = os.getenv("BARBACOA_UI_SCALE", "1.1").strip()
+        try:
+            value = float(raw)
+        except Exception:
+            return 1.1
+        return max(0.9, min(value, 1.6))
+
+    def _load_ui_start_mode(self) -> str:
+        raw = (os.getenv("BARBACOA_UI_START_MODE") or "maximized").strip().lower()
+        if raw not in {"maximized", "fullscreen", "windowed"}:
+            return "maximized"
+        return raw
+
+    def _load_open_comandas_mode(self) -> str:
+        raw = (os.getenv("BARBACOA_UI_OPEN_COMANDAS") or "collapsed").strip().lower()
+        if raw not in {"collapsed", "visible"}:
+            return "collapsed"
+        return raw
+
+    def _configure_window_mode(self) -> None:
+        self.geometry("1366x768")
+        self.minsize(1200, 700)
+        if self.ui_start_mode == "fullscreen":
+            self.attributes("-fullscreen", True)
+            return
+        self.attributes("-fullscreen", False)
+        if self.ui_start_mode == "maximized":
+            try:
+                self.state("zoomed")
+            except tk.TclError:
+                self.geometry("1366x768")
+
+    def _exit_fullscreen(self) -> None:
+        if self.attributes("-fullscreen"):
+            self.attributes("-fullscreen", False)
+            if self.ui_start_mode == "maximized":
+                try:
+                    self.state("zoomed")
+                except tk.TclError:
+                    pass
+
+    def _ui_px(self, value: int) -> int:
+        return max(8, int(round(value * self.ui_scale)))
+
     # ---------------- UI ----------------
     def _build_ui(self):
-        # Top bar
-        top = tk.Frame(self, bg="#1f2937")
-        top.pack(fill="x")
+        root = ttk.Frame(self, padding=(self._ui_px(8), self._ui_px(6), self._ui_px(8), self._ui_px(8)))
+        root.pack(fill="both", expand=True)
 
-        left_top = tk.Frame(top, bg="#1f2937")
-        left_top.pack(side="left", padx=12, pady=8)
+        self._build_header_compacto(root)
 
-        self.logo_img = load_logo(72)
+        self.main_pane = tk.PanedWindow(
+            root,
+            orient=tk.HORIZONTAL,
+            sashwidth=self._ui_px(6),
+            bd=0,
+            bg="#d1d5db",
+        )
+        self.main_pane.pack(fill="both", expand=True, pady=(self._ui_px(6), 0))
+
+        self.catalog_panel = tk.Frame(self.main_pane, bg="#f8fafc")
+        self.comanda_panel = tk.Frame(self.main_pane, bg="#f8fafc")
+        self.main_pane.add(self.catalog_panel, minsize=self._ui_px(360))
+        self.main_pane.add(self.comanda_panel, minsize=self._ui_px(520))
+
+        self._build_catalog_panel(self.catalog_panel)
+        self._build_comanda_panel(self.comanda_panel)
+        self.after(120, self._set_initial_pane_split)
+
+    def _build_header_compacto(self, parent: tk.Widget) -> None:
+        header = tk.Frame(parent, bg="#111827", height=self._ui_px(62))
+        header.pack(fill="x")
+        header.pack_propagate(False)
+
+        left = tk.Frame(header, bg="#111827")
+        left.pack(side="left", padx=self._ui_px(8))
+        self.logo_img = load_logo(self._ui_px(40))
         if self.logo_img:
-            tk.Label(left_top, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(0, 8))
-        tk.Label(left_top, text="BARBACOA POS", font=("Arial", 18, "bold"), fg="white", bg="#1f2937").pack(side="left")
-
-        center_top = tk.Frame(top, bg="#1f2937")
-        center_top.pack(side="left", padx=16, pady=6)
-        self.btn_gastos = ttk.Button(center_top, text="Gastos", command=self._open_gastos)
-        self.btn_propinas = ttk.Button(center_top, text="Propinas", command=self._open_propinas)
-        self.btn_personal = ttk.Button(center_top, text="Personal", command=self._open_personal)
-        self.btn_productos = ttk.Button(center_top, text="Productos", command=self._open_productos)
-        self.btn_corte = ttk.Button(center_top, text="Corte", command=self._open_corte)
-        self.btn_reportes = ttk.Button(center_top, text="Reportes", command=self._open_reportes)
-        self.btn_usuarios = ttk.Button(center_top, text="Usuarios", command=self._open_usuarios)
-
-        self.btn_gastos.pack(side="left", padx=4, pady=6)
-        self.btn_propinas.pack(side="left", padx=4, pady=6)
-        self.btn_personal.pack(side="left", padx=4, pady=6)
-        self.btn_productos.pack(side="left", padx=4, pady=6)
-        self.btn_corte.pack(side="left", padx=4, pady=6)
-        self.btn_reportes.pack(side="left", padx=4, pady=6)
-        self._usuarios_btn_visible = False
-
-        right_top = tk.Frame(top, bg="#1f2937")
-        right_top.pack(side="right", padx=12, pady=6)
-        self.role_var = tk.StringVar(value="Rol: MESERO")
-        tk.Label(right_top, textvariable=self.role_var, fg="#fbbf24", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e")
-        self.btn_unlock = ttk.Button(right_top, text="Desbloquear", style="Accent.TButton", command=self._unlock_role)
-        self.btn_unlock.pack(anchor="e", pady=(2, 0))
-        self.btn_lock = ttk.Button(right_top, text="Bloquear", command=self._lock_role)
-        self.btn_lock.pack(anchor="e", pady=(2, 0))
-        self.btn_change_pin = ttk.Button(right_top, text="Cambiar PIN", command=self._open_change_pin)
-        self.btn_change_pin.pack(anchor="e", pady=(2, 0))
-        tk.Label(right_top, text="Mesero", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e")
-        self.mesero_var = tk.StringVar()
-        self.mesero_menu = ttk.Combobox(right_top, textvariable=self.mesero_var, state="readonly", width=22)
-        self.mesero_menu.pack(anchor="e", pady=(2, 0))
-        self.mesero_menu.bind("<<ComboboxSelected>>", lambda _e: self._save_current_to_state())
-        self.mesero_menu.bind("<Return>", lambda _e: self.search_entry.focus_set())
-        self.mesero_menu.bind("<Button-1>", lambda _e: self._refresh_meseros_dropdown())
-        self._refresh_meseros_dropdown()
-        self.mesero_status_var = tk.StringVar(value="")
+            tk.Label(left, image=self.logo_img, bg="#111827").pack(side="left", padx=(0, self._ui_px(8)))
         tk.Label(
-            right_top,
-            textvariable=self.mesero_status_var,
-            fg="#fca5a5",
-            bg="#1f2937",
-            font=("Arial", 9, "bold"),
-            justify="right",
-            wraplength=210,
-        ).pack(anchor="e", pady=(2, 0))
+            left,
+            text="BARBACOA POS",
+            bg="#111827",
+            fg="#f9fafb",
+            font=("Arial", self._ui_px(17), "bold"),
+        ).pack(side="left")
 
-        tk.Label(right_top, text="Mesa", fg="#e5e7eb", bg="#1f2937", font=("Arial", 9, "bold")).pack(anchor="e", pady=(6, 0))
+        center = tk.Frame(header, bg="#111827")
+        center.pack(side="left", fill="x", expand=True, padx=self._ui_px(8))
+        tk.Label(center, text="Mesero", bg="#111827", fg="#e5e7eb", font=("Arial", self._ui_px(12), "bold")).pack(
+            side="left", padx=(0, self._ui_px(4))
+        )
+        self.mesero_var = tk.StringVar()
+        self.mesero_menu = ttk.Combobox(center, textvariable=self.mesero_var, state="readonly", width=17)
+        self.mesero_menu.pack(side="left")
+        self.mesero_menu.bind("<<ComboboxSelected>>", lambda _e: self._save_current_to_state())
+        self.mesero_menu.bind("<Return>", lambda _e: self.search_entry.focus_set() if hasattr(self, "search_entry") else None)
+        self.mesero_menu.bind("<Button-1>", lambda _e: self._refresh_meseros_dropdown())
+
+        tk.Label(center, text="Mesa", bg="#111827", fg="#e5e7eb", font=("Arial", self._ui_px(12), "bold")).pack(
+            side="left", padx=(self._ui_px(12), self._ui_px(4))
+        )
         self.mesa_var = tk.StringVar()
-        self.mesa_entry = ttk.Entry(right_top, textvariable=self.mesa_var, width=24)
-        self.mesa_entry.pack(anchor="e", pady=(2, 0))
+        self.mesa_entry = ttk.Entry(center, textvariable=self.mesa_var, width=8)
+        self.mesa_entry.pack(side="left")
         self.mesa_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
 
+        self.mesero_status_var = tk.StringVar(value="")
+        tk.Label(
+            center,
+            textvariable=self.mesero_status_var,
+            bg="#111827",
+            fg="#fca5a5",
+            font=("Arial", self._ui_px(11), "bold"),
+        ).pack(side="left", padx=(self._ui_px(10), 0))
+
+        right = tk.Frame(header, bg="#111827")
+        right.pack(side="right", padx=self._ui_px(8))
         self.clock_var = tk.StringVar()
-        tk.Label(right_top, textvariable=self.clock_var, fg="#e5e7eb", bg="#1f2937", font=("Arial", 10, "bold")).pack(anchor="e", pady=(6, 0))
-        ttk.Button(right_top, text="Salir", style="Danger.TButton", command=self._exit_app).pack(anchor="e", pady=(6, 0))
+        tk.Label(
+            right,
+            textvariable=self.clock_var,
+            bg="#111827",
+            fg="#e5e7eb",
+            font=("Arial", self._ui_px(12), "bold"),
+        ).pack(side="left", padx=(0, self._ui_px(8)))
 
-        # Main split
-        main = ttk.Frame(self, padding=10)
-        main.pack(fill="both", expand=True)
+        self.role_var = tk.StringVar(value="Rol: MESERO")
+        tk.Label(
+            right,
+            textvariable=self.role_var,
+            bg="#111827",
+            fg="#fbbf24",
+            font=("Arial", self._ui_px(12), "bold"),
+        ).pack(side="left", padx=(0, self._ui_px(8)))
 
-        left = ttk.Frame(main)
-        left.pack(side="left", fill="y", padx=(0, 10))
+        self.btn_unlock = ttk.Button(right, text="Desbloquear", style="Accent.TButton", command=self._unlock_role)
+        self.btn_unlock.pack(side="left", padx=(0, self._ui_px(6)))
+        self.btn_lock = ttk.Button(right, text="Bloquear", command=self._lock_role)
+        self.btn_lock.pack(side="left", padx=(0, self._ui_px(6)))
 
-        right = ttk.Frame(main)
-        right.pack(side="right", fill="both", expand=True)
+        self.btn_more = ttk.Menubutton(right, text="Mas")
+        self.btn_more.pack(side="left", padx=(0, self._ui_px(6)))
+        self._setup_more_menu()
 
-        # Left: comandas + filters + catalog
-        cmd_box = tk.Frame(left, bg="#f3f4f6")
-        cmd_box.pack(fill="x", pady=(0, 8))
-        tk.Label(cmd_box, text="Comandas abiertas", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
-        self.comandas_list = tk.Listbox(
-            left,
-            height=6,
-            font=("Arial", 11),
-            activestyle="none",
-            selectbackground="#1d4ed8",
-            selectforeground="white",
-            highlightthickness=1,
-            highlightbackground="#d1d5db",
-        )
-        self.comandas_list.pack(fill="x", pady=(0, 8))
-        self.comandas_list.bind("<<ListboxSelect>>", lambda _e: self._on_select_comanda())
+        ttk.Button(right, text="Salir", style="Danger.TButton", command=self._exit_app).pack(side="left")
 
-        cmd_btns = ttk.Frame(left)
-        cmd_btns.pack(fill="x", pady=(0, 12))
-        ttk.Button(cmd_btns, text="Nueva comanda", command=self._new_comanda).pack(side="left", padx=4)
-        ttk.Button(cmd_btns, text="Cerrar comanda", command=self._close_comanda).pack(side="left", padx=4)
+    def _setup_more_menu(self) -> None:
+        self.more_menu = tk.Menu(self.btn_more, tearoff=0)
+        self._more_menu_indexes: dict[str, int] = {}
+        self._add_more_menu_item("gastos", "Gastos", self._open_gastos)
+        self._add_more_menu_item("propinas", "Propinas", self._open_propinas)
+        self._add_more_menu_item("personal", "Personal", self._open_personal)
+        self._add_more_menu_item("productos", "Productos", self._open_productos)
+        self._add_more_menu_item("corte", "Corte", self._open_corte)
+        self._add_more_menu_item("reportes", "Reportes", self._open_reportes)
+        self._add_more_menu_item("usuarios", "Usuarios", self._open_usuarios)
+        self.more_menu.add_separator()
+        self._add_more_menu_item("change_pin", "Cambiar PIN", self._open_change_pin)
+        self.btn_more.configure(menu=self.more_menu)
 
-        atajos_box = tk.Frame(left, bg="#f3f4f6")
-        atajos_box.pack(fill="x", pady=(0, 8))
-        tk.Label(atajos_box, text="Atajos", font=("Arial", 11, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
-        atajos_txt = (
-            "Ctrl+S Guardar  |  Ctrl+N Nueva\n"
-            "Ctrl+F Buscar   |  Ctrl+M Mesero\n"
-            "Ctrl+D Eliminar |  Ctrl+L Vaciar\n"
-            "Enter agrega / guarda"
-        )
-        tk.Label(atajos_box, text=atajos_txt, font=("Arial", 9), fg="#374151", bg="#f3f4f6", justify="left").pack(anchor="w", padx=6, pady=(0, 6))
+    def _add_more_menu_item(self, key: str, label: str, command) -> None:
+        self.more_menu.add_command(label=label, command=command)
+        self._more_menu_indexes[key] = int(self.more_menu.index("end"))
 
-        cat_box = tk.Frame(left, bg="#f3f4f6")
-        cat_box.pack(fill="x", pady=(0, 4))
-        tk.Label(cat_box, text="Catálogo", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
+    def _build_catalog_panel(self, panel: tk.Widget) -> None:
+        panel.grid_columnconfigure(0, weight=1)
+        panel.grid_rowconfigure(2, weight=1)
 
         self.search_var = tk.StringVar()
-        self.search_entry = ttk.Entry(left, textvariable=self.search_var, width=30)
-        self.search_entry.pack(fill="x", pady=(6, 6))
+        self.search_entry = ttk.Entry(panel, textvariable=self.search_var)
+        self.search_entry.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+            padx=self._ui_px(8),
+            pady=(self._ui_px(8), self._ui_px(6)),
+        )
         self.search_entry.bind("<KeyRelease>", lambda _e: self._refresh_catalog())
         self.search_entry.bind("<Return>", lambda _e: self._focus_catalog())
 
+        controls = ttk.Frame(panel)
+        controls.grid(row=1, column=0, sticky="ew", padx=self._ui_px(8), pady=(0, self._ui_px(6)))
+        controls.grid_columnconfigure(1, weight=1)
+
+        ttk.Label(controls, text="Categoria").grid(row=0, column=0, sticky="w")
         cats = sorted({p.get("categoria", "GENERAL") for p in self.productos})
         self.cat_var = tk.StringVar(value="TODAS")
         cat_values = ["TODAS"] + cats
-        self.cat_menu = ttk.Combobox(left, textvariable=self.cat_var, values=cat_values, state="readonly")
-        self.cat_menu.pack(fill="x", pady=(0, 8))
+        self.cat_menu = ttk.Combobox(controls, textvariable=self.cat_var, values=cat_values, state="readonly", width=15)
+        self.cat_menu.grid(row=0, column=1, sticky="ew", padx=(self._ui_px(6), self._ui_px(8)))
         self.cat_menu.bind("<<ComboboxSelected>>", lambda _e: self._refresh_catalog())
 
-        # Product listbox
-        self.prod_list = tk.Listbox(
-            left,
-            height=25,
-            font=("Arial", 11),
+        ttk.Label(controls, text="Cant").grid(row=0, column=2, sticky="w")
+        self.qty_var = tk.StringVar(value="1")
+        self.qty_entry = ttk.Entry(controls, textvariable=self.qty_var, width=5)
+        self.qty_entry.grid(row=0, column=3, sticky="w", padx=(self._ui_px(6), self._ui_px(8)))
+        self.qty_entry.bind("<Return>", lambda _e: self._add_selected_product())
+        ttk.Button(controls, text="Agregar", style="CatalogAdd.TButton", command=self._add_selected_product).grid(
+            row=0, column=4, sticky="e"
+        )
+
+        catalog_wrap = ttk.Frame(panel)
+        catalog_wrap.grid(row=2, column=0, sticky="nsew", padx=self._ui_px(8), pady=(0, self._ui_px(8)))
+        catalog_wrap.grid_columnconfigure(0, weight=1)
+        catalog_wrap.grid_rowconfigure(0, weight=1)
+
+        self.catalog_canvas = tk.Canvas(catalog_wrap, bg="#eef2ff", highlightthickness=0)
+        self.catalog_canvas.grid(row=0, column=0, sticky="nsew")
+        self.catalog_scroll = ttk.Scrollbar(catalog_wrap, orient="vertical", command=self.catalog_canvas.yview)
+        self.catalog_scroll.grid(row=0, column=1, sticky="ns")
+        self.catalog_canvas.configure(yscrollcommand=self.catalog_scroll.set)
+
+        self.catalog_inner = tk.Frame(self.catalog_canvas, bg="#eef2ff")
+        self._catalog_window = self.catalog_canvas.create_window((0, 0), window=self.catalog_inner, anchor="nw")
+        self.catalog_inner.bind("<Configure>", self._on_catalog_inner_configure)
+        self.catalog_canvas.bind("<Configure>", self._on_catalog_canvas_configure)
+        self.catalog_canvas.bind("<MouseWheel>", self._on_catalog_mousewheel)
+        self.catalog_canvas.bind("<Button-4>", lambda _e: self.catalog_canvas.yview_scroll(-1, "units"))
+        self.catalog_canvas.bind("<Button-5>", lambda _e: self.catalog_canvas.yview_scroll(1, "units"))
+        self.catalog_card_buttons: list[tk.Widget] = []
+        self._selected_catalog_index = 0
+
+    def _build_comanda_panel(self, panel: tk.Widget) -> None:
+        panel.grid_columnconfigure(0, weight=1)
+        panel.grid_rowconfigure(2, weight=1)
+
+        top = ttk.Frame(panel)
+        top.grid(row=0, column=0, sticky="ew", padx=self._ui_px(8), pady=(self._ui_px(8), self._ui_px(6)))
+        top.grid_columnconfigure(0, weight=1)
+        ttk.Label(top, text="Comanda", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        actions = ttk.Frame(top)
+        actions.grid(row=0, column=1, sticky="e")
+        ttk.Button(actions, text="Nueva", command=self._new_comanda).pack(side="left", padx=(0, self._ui_px(4)))
+        ttk.Button(actions, text="Cerrar", command=self._close_comanda).pack(side="left", padx=(0, self._ui_px(4)))
+        self.open_orders_visible = self.open_comandas_mode == "visible"
+        self.toggle_orders_var = tk.StringVar()
+        self.toggle_orders_btn = ttk.Button(
+            actions,
+            textvariable=self.toggle_orders_var,
+            command=self._toggle_open_orders_panel,
+        )
+        self.toggle_orders_btn.pack(side="left")
+
+        self.open_orders_panel = tk.Frame(panel, bg="#eef2ff", highlightthickness=1, highlightbackground="#c7d2fe")
+        self.open_orders_panel.grid(row=1, column=0, sticky="ew", padx=self._ui_px(8), pady=(0, self._ui_px(6)))
+        self.comandas_list = tk.Listbox(
+            self.open_orders_panel,
+            height=4,
+            font=("Arial", self._ui_px(13)),
             activestyle="none",
             selectbackground="#1d4ed8",
             selectforeground="white",
-            highlightthickness=1,
-            highlightbackground="#d1d5db",
+            highlightthickness=0,
         )
-        self.prod_list.pack(fill="both", expand=True)
-        self.prod_list.bind("<Double-Button-1>", lambda _e: self._add_selected_product())
-        self.prod_list.bind("<Return>", lambda _e: self._add_selected_product())
+        self.comandas_list.pack(fill="x", padx=self._ui_px(6), pady=self._ui_px(6))
+        self.comandas_list.bind("<<ListboxSelect>>", lambda _e: self._on_select_comanda())
+        self._apply_open_orders_visibility()
 
-        qty_row = ttk.Frame(left)
-        qty_row.pack(fill="x", pady=8)
-        ttk.Label(qty_row, text="Cantidad:").pack(side="left")
-        self.qty_var = tk.StringVar(value="1")
-        self.qty_entry = ttk.Entry(qty_row, textvariable=self.qty_var, width=6)
-        self.qty_entry.pack(side="left", padx=6)
-        self.qty_entry.bind("<Return>", lambda _e: self._add_selected_product())
-
-        ttk.Button(left, text="Agregar", command=self._add_selected_product).pack(fill="x")
-
-        # Right: ticket table
-        cmd_hdr = tk.Frame(right, bg="#f3f4f6")
-        cmd_hdr.pack(fill="x")
-        tk.Label(cmd_hdr, text="Comanda", font=("Arial", 12, "bold"), fg="#111827", bg="#f3f4f6").pack(anchor="w", padx=6, pady=4)
-
-        table_frame = ttk.Frame(right)
-        table_frame.pack(fill="both", expand=True, pady=8)
-
+        table_frame = ttk.Frame(panel)
+        table_frame.grid(row=2, column=0, sticky="nsew", padx=self._ui_px(8), pady=(0, self._ui_px(6)))
+        table_frame.grid_columnconfigure(0, weight=1)
+        table_frame.grid_rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(table_frame, columns=("dec", "qty", "inc", "prod", "unit", "sub"), show="headings")
-        self.tree.heading("dec", text="")
+        self.tree.heading("dec", text="Quitar")
         self.tree.heading("qty", text="Cant")
-        self.tree.heading("inc", text="")
+        self.tree.heading("inc", text="Sumar")
         self.tree.heading("prod", text="Producto")
         self.tree.heading("unit", text="P.Unit")
         self.tree.heading("sub", text="Subtotal")
-
-        self.tree.column("dec", width=42, anchor="center")
-        self.tree.column("qty", width=80, anchor="center")
-        self.tree.column("inc", width=42, anchor="center")
-        self.tree.column("prod", width=430, anchor="center")
-        self.tree.column("unit", width=110, anchor="center")
-        self.tree.column("sub", width=120, anchor="center")
-
-        self.tree.pack(fill="both", expand=True)
+        self.tree.column("dec", width=self._ui_px(96), anchor="center")
+        self.tree.column("qty", width=self._ui_px(86), anchor="center")
+        self.tree.column("inc", width=self._ui_px(96), anchor="center")
+        self.tree.column("prod", width=self._ui_px(400), anchor="w")
+        self.tree.column("unit", width=self._ui_px(120), anchor="center")
+        self.tree.column("sub", width=self._ui_px(125), anchor="center")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<Delete>", lambda _e: self._remove_selected())
         self.tree.bind("<plus>", lambda _e: self._inc_selected())
         self.tree.bind("<minus>", lambda _e: self._dec_selected())
-        self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<Double-Button-1>", self._on_tree_double_click)
 
-        btns = ttk.Frame(right)
-        btns.pack(fill="x")
-        ttk.Button(btns, text="Eliminar seleccionado (Del)", command=self._remove_selected).pack(side="left", padx=5)
-        ttk.Button(btns, text="Vaciar", command=self._clear_all).pack(side="left", padx=5)
+        btns = ttk.Frame(panel)
+        btns.grid(row=3, column=0, sticky="ew", padx=self._ui_px(8), pady=(0, self._ui_px(6)))
+        for col in range(2):
+            btns.columnconfigure(col, weight=1)
+        ttk.Button(btns, text="Eliminar", style="Touch.TButton", command=self._remove_selected).grid(
+            row=0, column=0, padx=(0, self._ui_px(4)), sticky="ew"
+        )
+        ttk.Button(btns, text="Vaciar", style="Touch.TButton", command=self._clear_all).grid(
+            row=0, column=1, sticky="ew"
+        )
 
-        ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(10, 6))
-        cobro_hdr = tk.Frame(right, bg="#e5e7eb")
-        cobro_hdr.pack(fill="x", pady=(0, 6))
-        tk.Label(cobro_hdr, text="Cobro", font=("Arial", 12, "bold"), fg="#111827", bg="#e5e7eb").pack(anchor="w", padx=6, pady=4)
+        cobro = tk.Frame(panel, bg="#f3f4f6")
+        cobro.grid(row=4, column=0, sticky="ew", padx=self._ui_px(8), pady=(0, self._ui_px(8)))
+        self._build_cobro_panel(cobro)
 
-        # Payment + total
-        pay = tk.Frame(right, bg="#f3f4f6")
-        pay.pack(fill="x", pady=(0, 6))
-
+    def _build_cobro_panel(self, panel: tk.Widget) -> None:
+        pay = tk.Frame(panel, bg="#e5e7eb")
+        pay.pack(fill="x")
         self.total_var = tk.StringVar(value="0.00")
-        tk.Label(pay, text="TOTAL:", font=("Arial", 22, "bold"), fg="#111827", bg="#f3f4f6").pack(side="left", padx=6, pady=6)
-        tk.Label(pay, textvariable=self.total_var, font=("Arial", 24, "bold"), fg="#dc2626", bg="#f3f4f6").pack(side="left", padx=(6, 0))
+        tk.Label(
+            pay,
+            text="TOTAL:",
+            font=("Arial", self._ui_px(20), "bold"),
+            fg="#111827",
+            bg="#e5e7eb",
+        ).pack(side="left", padx=self._ui_px(8), pady=self._ui_px(6))
+        tk.Label(
+            pay,
+            textvariable=self.total_var,
+            font=("Arial", self._ui_px(26), "bold"),
+            fg="#dc2626",
+            bg="#e5e7eb",
+        ).pack(side="left")
 
-        pay2 = ttk.Frame(right)
-        pay2.pack(fill="x")
-
-        ttk.Label(pay2, text="Método:").pack(side="left")
+        pay2 = ttk.Frame(panel)
+        pay2.pack(fill="x", pady=(self._ui_px(6), 0))
+        ttk.Label(pay2, text="Metodo:").pack(side="left")
         self.metodo_var = tk.StringVar(value="EFECTIVO")
-        metodo = ttk.Combobox(pay2, textvariable=self.metodo_var, values=["EFECTIVO", "TARJETA", "TRANSFER"], state="readonly", width=12)
-        metodo.pack(side="left", padx=6)
+        metodo = ttk.Combobox(
+            pay2,
+            textvariable=self.metodo_var,
+            values=["EFECTIVO", "TARJETA", "TRANSFER"],
+            state="readonly",
+            width=12,
+        )
+        metodo.pack(side="left", padx=self._ui_px(8))
         metodo.bind("<<ComboboxSelected>>", lambda _e: self._toggle_cash_fields())
 
-        ttk.Label(pay2, text="Propina:").pack(side="left", padx=(12, 0))
+        ttk.Label(pay2, text="Propina:").pack(side="left", padx=(self._ui_px(12), 0))
         self.propina_var = tk.StringVar()
         self.propina_entry = ttk.Entry(pay2, textvariable=self.propina_var, width=10)
-        self.propina_entry.pack(side="left", padx=6)
+        self.propina_entry.pack(side="left", padx=self._ui_px(8))
         self.propina_entry.bind("<Return>", lambda _e: self._save_comanda())
         self.propina_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
 
-        self.cash_frame = ttk.Frame(right)
-        self.cash_frame.pack(fill="x", pady=(6, 0))
-
+        self.cash_frame = ttk.Frame(panel)
+        self.cash_frame.pack(fill="x", pady=(self._ui_px(6), 0))
         ttk.Label(self.cash_frame, text="Recibido:").pack(side="left")
         self.recibido_var = tk.StringVar()
         self.recibido_entry = ttk.Entry(self.cash_frame, textvariable=self.recibido_var, width=12)
-        self.recibido_entry.pack(side="left", padx=6)
+        self.recibido_entry.pack(side="left", padx=self._ui_px(8))
         self.recibido_entry.bind("<KeyRelease>", lambda _e: self._update_change())
         self.recibido_entry.bind("<Return>", lambda _e: self._save_comanda())
-
-        ttk.Label(self.cash_frame, text="Cambio:").pack(side="left", padx=(10, 0))
+        ttk.Label(self.cash_frame, text="Cambio:").pack(side="left", padx=(self._ui_px(12), 0))
         self.cambio_var = tk.StringVar(value="0.00")
-        ttk.Label(self.cash_frame, textvariable=self.cambio_var, font=("Arial", 12, "bold")).pack(side="left", padx=6)
+        ttk.Label(
+            self.cash_frame,
+            textvariable=self.cambio_var,
+            font=("Arial", self._ui_px(15), "bold"),
+        ).pack(side="left", padx=self._ui_px(8))
 
         self._toggle_cash_fields()
+        self.save_btn = ttk.Button(panel, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda)
+        self.save_btn.pack(fill="x", pady=(self._ui_px(8), self._ui_px(6)))
 
-        self.save_btn = ttk.Button(right, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda)
-        self.save_btn.pack(fill="x", pady=10)
+    def _set_initial_pane_split(self) -> None:
+        try:
+            width = self.main_pane.winfo_width()
+            if width <= 1:
+                self.after(100, self._set_initial_pane_split)
+                return
+            self.main_pane.sash_place(0, int(width * 0.45), 0)
+        except Exception:
+            pass
+
+    def _apply_open_orders_visibility(self) -> None:
+        if self.open_orders_visible:
+            self.open_orders_panel.grid()
+            self.toggle_orders_var.set("Ocultar comandas")
+        else:
+            self.open_orders_panel.grid_remove()
+            self.toggle_orders_var.set("Mostrar comandas")
+
+    def _toggle_open_orders_panel(self) -> None:
+        self.open_orders_visible = not self.open_orders_visible
+        self._apply_open_orders_visibility()
 
     # ---------------- Logic ----------------
     def _bind_shortcuts(self):
@@ -322,28 +523,36 @@ class POSApp(tk.Tk):
         self.bind_all("<Control-m>", lambda _e: self.mesero_menu.focus_set())
         self.bind_all("<Control-d>", lambda _e: self._remove_selected())
         self.bind_all("<Control-l>", lambda _e: self._clear_all())
+        self.bind_all("<Control-plus>", lambda _e: self._inc_selected())
+        self.bind_all("<Control-equal>", lambda _e: self._inc_selected())
+        self.bind_all("<Control-minus>", lambda _e: self._dec_selected())
         self.bind_all("<Control-q>", lambda _e: self._exit_app())
 
     def _apply_role_to_ui(self):
         role = self.auth.current_role()
         self.role_var.set(f"Rol: {role.value}")
         self.btn_lock.configure(state=("disabled" if role == Role.MESERO else "normal"))
-        self.btn_change_pin.configure(state=("disabled" if role == Role.MESERO else "normal"))
 
-        self.btn_gastos.configure(state=("normal" if self.auth.can(Permission.GASTOS) else "disabled"))
-        self.btn_propinas.configure(state=("normal" if self.auth.can(Permission.PROPINAS) else "disabled"))
-        self.btn_corte.configure(state=("normal" if self.auth.can(Permission.CORTE) else "disabled"))
-        self.btn_reportes.configure(state=("normal" if self.auth.can(Permission.REPORTES) else "disabled"))
-        self.btn_personal.configure(state=("normal" if self.auth.can(Permission.PERSONAL) else "disabled"))
-        self.btn_productos.configure(state=("normal" if self.auth.can(Permission.PRODUCTOS) else "disabled"))
+        menu_permissions = {
+            "gastos": self.auth.can(Permission.GASTOS),
+            "propinas": self.auth.can(Permission.PROPINAS),
+            "corte": self.auth.can(Permission.CORTE),
+            "reportes": self.auth.can(Permission.REPORTES),
+            "personal": self.auth.can(Permission.PERSONAL),
+            "productos": self.auth.can(Permission.PRODUCTOS),
+            "usuarios": self.auth.can(Permission.USUARIOS),
+        }
+        for key, enabled in menu_permissions.items():
+            idx = self._more_menu_indexes.get(key)
+            if idx is not None:
+                self.more_menu.entryconfigure(idx, state=("normal" if enabled else "disabled"))
 
-        can_users = self.auth.can(Permission.USUARIOS)
-        if can_users and not self._usuarios_btn_visible:
-            self.btn_usuarios.pack(side="left", padx=4, pady=6)
-            self._usuarios_btn_visible = True
-        if not can_users and self._usuarios_btn_visible:
-            self.btn_usuarios.pack_forget()
-            self._usuarios_btn_visible = False
+        change_pin_idx = self._more_menu_indexes.get("change_pin")
+        if change_pin_idx is not None:
+            self.more_menu.entryconfigure(
+                change_pin_idx,
+                state=("disabled" if role == Role.MESERO else "normal"),
+            )
 
     def _unlock_role(self):
         result = ask_unlock(self, self.auth)
@@ -380,11 +589,160 @@ class POSApp(tk.Tk):
         self.after(1000, self._tick_clock)
 
     def _focus_catalog(self):
-        if self.prod_list.size() > 0:
-            if not self.prod_list.curselection():
-                self.prod_list.selection_set(0)
-            self.prod_list.activate(0)
-        self.prod_list.focus_set()
+        if self.catalog_card_buttons:
+            self._selected_catalog_index = 0
+            self.catalog_card_buttons[0].focus_set()
+
+    def _on_catalog_inner_configure(self, _event=None):
+        self.catalog_canvas.configure(scrollregion=self.catalog_canvas.bbox("all"))
+
+    def _on_catalog_canvas_configure(self, event):
+        self.catalog_canvas.itemconfigure(self._catalog_window, width=event.width)
+        self._render_catalog_cards()
+
+    def _on_catalog_mousewheel(self, event):
+        if not hasattr(self, "catalog_canvas"):
+            return
+        if not self.catalog_canvas.winfo_ismapped():
+            return
+        delta = getattr(event, "delta", 0)
+        if delta == 0:
+            return
+        self.catalog_canvas.yview_scroll(int(-1 * (delta / 120)), "units")
+
+    def _category_color(self, category: str) -> str:
+        palette = [
+            "#2563eb",
+            "#0891b2",
+            "#16a34a",
+            "#ca8a04",
+            "#dc2626",
+            "#7c3aed",
+            "#db2777",
+            "#0f766e",
+        ]
+        seed = sum(ord(ch) for ch in category.upper())
+        return palette[seed % len(palette)]
+
+    def _product_badge(self, product: dict) -> str:
+        nombre = str(product.get("nombre") or "").strip()
+        if not nombre:
+            return "PR"
+        chunks = [part[0] for part in nombre.split() if part]
+        if len(chunks) >= 2:
+            return (chunks[0] + chunks[1]).upper()
+        if len(nombre) >= 2:
+            return nombre[:2].upper()
+        return nombre[0].upper()
+
+    def _render_catalog_cards(self):
+        if not hasattr(self, "catalog_inner"):
+            return
+
+        for child in self.catalog_inner.winfo_children():
+            child.destroy()
+        self.catalog_card_buttons = []
+
+        if not self.filtered:
+            empty = tk.Label(
+                self.catalog_inner,
+                text="No hay productos para este filtro",
+                bg="#eef2ff",
+                fg="#374151",
+                font=("Arial", self._ui_px(12), "bold"),
+            )
+            empty.grid(row=0, column=0, padx=self._ui_px(12), pady=self._ui_px(12), sticky="w")
+            return
+
+        canvas_width = max(self.catalog_canvas.winfo_width(), self._ui_px(320))
+        card_w = self._ui_px(185)
+        card_h = self._ui_px(150)
+        gap = self._ui_px(8)
+        cols = max(2, canvas_width // (card_w + gap))
+
+        for col in range(cols):
+            self.catalog_inner.grid_columnconfigure(col, weight=1)
+
+        for idx, p in enumerate(self.filtered):
+            row = idx // cols
+            col = idx % cols
+            categoria = str(p.get("categoria", "GENERAL"))
+            accent = self._category_color(categoria)
+
+            card = tk.Frame(
+                self.catalog_inner,
+                bg="#ffffff",
+                bd=1,
+                relief="solid",
+                highlightthickness=1,
+                highlightbackground=accent,
+            )
+            card.grid(row=row, column=col, padx=gap // 2, pady=gap // 2, sticky="nsew")
+            card.configure(width=card_w, height=card_h)
+            card.grid_propagate(False)
+
+            cat_chip = tk.Label(
+                card,
+                text=categoria[:14],
+                bg=accent,
+                fg="white",
+                font=("Arial", self._ui_px(11), "bold"),
+                anchor="w",
+                padx=self._ui_px(6),
+            )
+            cat_chip.pack(fill="x")
+
+            top = tk.Frame(card, bg="#ffffff")
+            top.pack(fill="both", expand=True, padx=self._ui_px(6), pady=(self._ui_px(5), self._ui_px(2)))
+
+            badge = tk.Label(
+                top,
+                text=self._product_badge(p),
+                width=4,
+                bg="#e0e7ff",
+                fg="#1e3a8a",
+                font=("Arial", self._ui_px(12), "bold"),
+                relief="ridge",
+                bd=1,
+            )
+            badge.pack(anchor="w")
+
+            name_lbl = tk.Label(
+                top,
+                text=str(p.get("nombre") or "Producto"),
+                bg="#ffffff",
+                fg="#111827",
+                font=("Arial", self._ui_px(15), "bold"),
+                justify="left",
+                wraplength=card_w - self._ui_px(12),
+                anchor="w",
+            )
+            name_lbl.pack(fill="x", pady=(self._ui_px(4), self._ui_px(2)))
+
+            price_lbl = tk.Label(
+                top,
+                text=f"${float(p.get('precio') or 0):.2f}",
+                bg="#ffffff",
+                fg="#dc2626",
+                font=("Arial", self._ui_px(17), "bold"),
+                anchor="w",
+            )
+            price_lbl.pack(fill="x")
+
+            add_btn = ttk.Button(
+                card,
+                text="Agregar",
+                style="CatalogAdd.TButton",
+                command=lambda prod=p, i=idx: self._add_product_from_catalog(prod, i),
+            )
+            add_btn.pack(fill="x", padx=self._ui_px(6), pady=(0, self._ui_px(6)))
+            self.catalog_card_buttons.append(add_btn)
+
+            for widget in (card, top, badge, cat_chip, name_lbl, price_lbl):
+                widget.bind(
+                    "<Button-1>",
+                    lambda _e, prod=p, i=idx: self._add_product_from_catalog(prod, i),
+                )
 
     def _comanda_snapshot(self) -> dict:
         return {
@@ -524,7 +882,6 @@ class POSApp(tk.Tk):
         cat = self.cat_var.get()
 
         self.filtered = []
-        self.prod_list.delete(0, tk.END)
 
         for p in self.productos:
             if not p.get("activo", True):
@@ -532,21 +889,20 @@ class POSApp(tk.Tk):
             pcat = p.get("categoria", "GENERAL")
             if cat != "TODAS" and pcat != cat:
                 continue
-            label = f"[{pcat}] {p['nombre']}  -  ${float(p['precio']):.2f}"
             if q and (q not in p["nombre"].lower()) and (q not in pcat.lower()):
                 continue
             self.filtered.append(p)
-            self.prod_list.insert(tk.END, label)
-            idx = self.prod_list.size() - 1
-            bg = "#ffffff" if idx % 2 == 0 else "#f3f4f6"
-            self.prod_list.itemconfig(idx, bg=bg)
+        self._render_catalog_cards()
 
     def _add_selected_product(self):
-        sel = self.prod_list.curselection()
-        if not sel:
-            messagebox.showwarning("Selecciona producto", "Doble click o selecciona un producto para agregar.")
+        if not self.filtered:
+            messagebox.showwarning("Sin productos", "No hay productos disponibles para agregar.")
             return
-        p = self.filtered[sel[0]]
+        idx = min(self._selected_catalog_index, len(self.filtered) - 1)
+        self._add_product_from_catalog(self.filtered[idx], idx)
+
+    def _add_product_from_catalog(self, product: dict, index: int):
+        self._selected_catalog_index = max(0, index)
         try:
             qty = int(self.qty_var.get().strip())
             if qty <= 0:
@@ -555,11 +911,11 @@ class POSApp(tk.Tk):
             messagebox.showwarning("Cantidad inválida", "Cantidad debe ser entero > 0.")
             return
 
-        unit = float(p["precio"])
+        unit = float(product["precio"])
         sub = calcular_subtotal(unit, qty)
         self.items.append({
-            "producto_id": p["id"],
-            "nombre_snapshot": p["nombre"],
+            "producto_id": product["id"],
+            "nombre_snapshot": product["nombre"],
             "precio_unitario": unit,
             "cantidad": qty,
             "subtotal": sub,
@@ -574,10 +930,15 @@ class POSApp(tk.Tk):
             tag = "even" if idx % 2 == 0 else "odd"
             self.tree.insert(
                 "", "end", iid=str(idx),
-                values=("[-]", it["cantidad"], "[+]", it["nombre_snapshot"],
-                        f"${float(it['precio_unitario']):.2f}",
-                        f"${float(it['subtotal']):.2f}")
-                , tags=(tag,)
+                values=(
+                    "[ - ]",
+                    it["cantidad"],
+                    "[ + ]",
+                    it["nombre_snapshot"],
+                    f"${float(it['precio_unitario']):.2f}",
+                    f"${float(it['subtotal']):.2f}",
+                ),
+                tags=(tag,),
             )
         self.tree.tag_configure("even", background="#ffffff")
         self.tree.tag_configure("odd", background="#f3f4f6")
@@ -634,14 +995,17 @@ class POSApp(tk.Tk):
 
     def _on_tree_click(self, event):
         row_id = self.tree.identify_row(event.y)
+        col = self.tree.identify_column(event.x)
         if not row_id:
             return
-        col = self.tree.identify_column(event.x)
         self.tree.selection_set(row_id)
+        self.tree.focus(row_id)
         if col == "#1":
             self._dec_selected()
-        elif col == "#3":
+            return "break"
+        if col == "#3":
             self._inc_selected()
+            return "break"
 
     def _on_tree_double_click(self, event):
         row_id = self.tree.identify_row(event.y)
@@ -684,9 +1048,10 @@ class POSApp(tk.Tk):
 
         x, y, w, h = self.tree.bbox(row_id, col)
         editor.place(x=x, y=y, width=w, height=h)
+
     def _toggle_cash_fields(self):
         if self.metodo_var.get() == "EFECTIVO":
-            self.cash_frame.pack(fill="x", pady=(6, 0))
+            self.cash_frame.pack(fill="x", pady=(self._ui_px(8), 0))
         else:
             self.cash_frame.pack_forget()
             self.recibido_var.set("")
@@ -861,7 +1226,7 @@ class POSApp(tk.Tk):
             self.mesero_status_var.set("")
             return
         self.save_btn.configure(state="disabled")
-        self.mesero_status_var.set("Sin meseros activos. Desbloquea gerente/dueño para habilitar personal.")
+        self.mesero_status_var.set("Sin meseros activos")
 
     def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
         if not self._ticket_save_enabled():
