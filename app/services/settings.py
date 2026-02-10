@@ -5,6 +5,7 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+BARBACOA_TIMEZONE = (os.getenv("BARBACOA_TIMEZONE") or "").strip()
 
 
 def _env_float(name: str, default: float) -> float:

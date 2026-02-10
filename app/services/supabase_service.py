@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timezone
 import logging
 import os
 import threading
+from zoneinfo import ZoneInfo
 
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
@@ -38,6 +39,7 @@ from .repositories import (
 )
 from .settings import SUPABASE_KEY, SUPABASE_URL
 from .settings import SUPABASE_TIMEOUT_SECONDS
+from .settings import BARBACOA_TIMEZONE
 
 
 class SupabaseService(OfflineSync):
@@ -55,6 +57,7 @@ class SupabaseService(OfflineSync):
         self.offline = OfflineStore(base_dir)
         self._base_dir = base_dir
         self._logger = logging.getLogger("barbacoa.pos.supabase")
+        self._business_tz = self._load_business_timezone()
 
         self.productos_repo = ProductosRepository(self.client)
         self.meseros_repo = MeserosRepository(self.client)
@@ -324,13 +327,7 @@ class SupabaseService(OfflineSync):
         if month < 1 or month > 12:
             raise ValueError("month debe estar entre 1 y 12")
 
-        desde = datetime(year, month, 1, tzinfo=timezone.utc)
-        if month == 12:
-            hasta = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-        else:
-            hasta = datetime(year, month + 1, 1, tzinfo=timezone.utc)
-
-        hasta = hasta.replace(microsecond=0) - datetime.resolution
+        desde, hasta = self._month_range(year, month)
         rows = self.listar_propinas_rango(desde, hasta)
         return self._aggregate_propinas_rows(rows)
 
@@ -518,7 +515,29 @@ class SupabaseService(OfflineSync):
         return updated.to_record()
 
     # ---------------- Helpers ----------------
+    def _load_business_timezone(self):
+        raw = BARBACOA_TIMEZONE
+        if raw:
+            try:
+                return ZoneInfo(raw)
+            except Exception:
+                self._logger.warning("BARBACOA_TIMEZONE invalida: %s. Se usa zona local del sistema.", raw)
+        local_tz = datetime.now().astimezone().tzinfo
+        return local_tz or timezone.utc
+
+    def _month_range(self, year: int, month: int) -> tuple[datetime, datetime]:
+        start_local = datetime(year, month, 1, tzinfo=self._business_tz)
+        if month == 12:
+            next_local = datetime(year + 1, 1, 1, tzinfo=self._business_tz)
+        else:
+            next_local = datetime(year, month + 1, 1, tzinfo=self._business_tz)
+        start_utc = start_local.astimezone(timezone.utc)
+        end_utc = next_local.astimezone(timezone.utc) - datetime.resolution
+        return start_utc, end_utc
+
     def _day_range(self, fecha: date) -> tuple[str, str]:
-        start = datetime.combine(fecha, time.min, tzinfo=timezone.utc)
-        end = datetime.combine(fecha, time.max, tzinfo=timezone.utc)
-        return start.isoformat(), end.isoformat()
+        start_local = datetime.combine(fecha, time.min, tzinfo=self._business_tz)
+        end_local = datetime.combine(fecha, time.max, tzinfo=self._business_tz)
+        start_utc = start_local.astimezone(timezone.utc)
+        end_utc = end_local.astimezone(timezone.utc)
+        return start_utc.isoformat(), end_utc.isoformat()
