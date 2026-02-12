@@ -109,6 +109,10 @@ Logo en `app/assets/`:
 - La reapertura de un día cerrado requiere confirmación de PIN de dueño.
 - `GERENTE` no tiene acceso a reportes.
 - `GERENTE` y `DUEÑO` pueden cambiar su propio PIN desde la barra superior (botón `Cambiar PIN`).
+- Recuperación de PIN: desde `Desbloquear` -> `Olvidé mi PIN`.
+- El código se envía por correo a `sistemamirandapos@gmail.com` (o el correo configurado).
+- El código rota en cada solicitud, expira y solo se puede usar una vez.
+- Requiere SMTP configurado en `.env` y conexión a internet.
 
 ## Jornada de caja (ergonómico)
 
@@ -134,8 +138,15 @@ Configura en `.env`:
 ```env
 BARBACOA_GERENTE_PIN=1234
 BARBACOA_DUENIO_PIN=5678
+BARBACOA_RECOVERY_EMAIL_TO=sistemamirandapos@gmail.com
+BARBACOA_SMTP_HOST=smtp.gmail.com
+BARBACOA_SMTP_PORT=587
+BARBACOA_SMTP_USER=sistemamirandapos@gmail.com
+BARBACOA_SMTP_PASSWORD=tu_app_password_de_gmail
 BARBACOA_AUTH_CACHE_TTL_HOURS=24
 ```
+
+Para Gmail, usa `App Password` (no tu contraseña normal).
 
 Ejecuta:
 

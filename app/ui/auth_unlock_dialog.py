@@ -8,6 +8,7 @@ import customtkinter as ctk
 from domain.auth import Role
 from services.auth_service import AuthService, UnlockResult
 from ui.assets import load_logo
+from ui.pin_recovery_dialog import ask_pin_recovery
 
 
 class AuthUnlockDialog(ctk.CTkToplevel):
@@ -79,6 +80,7 @@ class AuthUnlockDialog(ctk.CTkToplevel):
 
         btns = ctk.CTkFrame(form, fg_color="transparent")
         btns.grid(row=3, column=0, columnspan=2, padx=8, pady=(6, 0), sticky="e")
+        ttk.Button(btns, text="Olvide mi PIN", command=self._open_recovery).pack(side="left", padx=6)
         ttk.Button(btns, text="Cancelar", command=self._cancel).pack(side="left", padx=6)
         ttk.Button(btns, text="Desbloquear", style="Accent.TButton", command=self._unlock).pack(side="left", padx=6)
 
@@ -97,6 +99,13 @@ class AuthUnlockDialog(ctk.CTkToplevel):
             messagebox.showinfo("Acceso offline", result.message)
 
         self.result = result
+        self.destroy()
+
+    def _open_recovery(self):
+        recovered = ask_pin_recovery(self, self.auth, fixed_role=self.fixed_role)
+        if not recovered:
+            return
+        self.result = UnlockResult(True, recovered.role, "recovery", recovered.message)
         self.destroy()
 
     def _cancel(self):
