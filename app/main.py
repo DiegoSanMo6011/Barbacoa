@@ -46,7 +46,7 @@ class POSApp(tk.Tk):
         except tk.TclError:
             pass
 
-        self.title("Autonoma POS")
+        self.title("AutoNoma POS")
         self._configure_window_mode()
         self.bind("<Escape>", lambda _e: self._exit_fullscreen())
 
@@ -232,7 +232,7 @@ class POSApp(tk.Tk):
             tk.Label(left, image=self.logo_img, bg="#111827").pack(side="left", padx=(0, self._ui_px(8)))
         tk.Label(
             left,
-            text="BARBACOA POS",
+            text="AUTONOMA POS",
             bg="#111827",
             fg="#f9fafb",
             font=("Arial", self._ui_px(17), "bold"),
@@ -1413,7 +1413,7 @@ class POSApp(tk.Tk):
     def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
         if not self._ticket_save_enabled():
             return "", build_ticket_text({
-                "negocio": "Barbacoa de Mirand",
+                "negocio": "Barbacoa de Miranda",
                 "folio": comanda.get("folio") or f"LOCAL-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 "fecha_hora": datetime.now(),
                 "mesa": self.mesa_var.get().strip() if hasattr(self, "mesa_var") else "",
@@ -1429,7 +1429,7 @@ class POSApp(tk.Tk):
             folio = f"LOCAL-{ts.strftime('%Y%m%d%H%M%S')}"
 
         payload = {
-            "negocio": "Barbacoa de Mirand",
+            "negocio": "Barbacoa de Miranda",
             "folio": folio,
             "fecha_hora": ts,
             "mesa": self.mesa_var.get().strip() if hasattr(self, "mesa_var") else "",
