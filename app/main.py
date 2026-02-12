@@ -24,12 +24,14 @@ from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
 from ui.ticket_preview import TicketPreview
 from ui.change_pin_dialog import ChangePinDialog
+from ui.messagebox_fix import install_messagebox_parenting
 from services.printer import print_ticket_text, should_autoprint
 
 
 class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        install_messagebox_parenting(self)
         self.logger = logging.getLogger("barbacoa.pos")
         self.ui_scale = self._load_ui_scale()
         self.ui_start_mode = self._load_ui_start_mode()

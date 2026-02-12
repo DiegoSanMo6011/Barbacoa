@@ -3,11 +3,13 @@ from tkinter import ttk, messagebox
 
 from services.supabase_service import SupabaseService
 from domain.calc import calcular_subtotal, calcular_total
+from ui.messagebox_fix import install_messagebox_parenting
 
 
 class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
+        install_messagebox_parenting(self)
         self.title("Barbacoa POS - Demo Profesional (Tk)")
         self.geometry("1100x700")
 
