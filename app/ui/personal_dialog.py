@@ -6,6 +6,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
+from ui.mousewheel import bind_mousewheel
 
 
 class PersonalDialog(ctk.CTkToplevel):
@@ -94,6 +95,7 @@ class PersonalDialog(ctk.CTkToplevel):
         tree_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         tree_scroll.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=tree_scroll.set)
+        bind_mousewheel(self.tree, self.tree.yview)
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
 
         status = ctk.CTkFrame(self, fg_color="transparent")

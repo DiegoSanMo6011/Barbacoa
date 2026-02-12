@@ -8,6 +8,7 @@ from tkinter import ttk, messagebox
 import customtkinter as ctk
 
 from ui.assets import load_logo
+from ui.mousewheel import bind_mousewheel
 from services.reportes_service import (
     get_top_productos,
     get_ventas_por_dia,
@@ -109,6 +110,7 @@ class ReportesView(ctk.CTkToplevel):
         top_scroll = ttk.Scrollbar(top_frame, orient="vertical", command=self.top_tree.yview)
         top_scroll.grid(row=0, column=1, sticky="ns")
         self.top_tree.configure(yscrollcommand=top_scroll.set)
+        bind_mousewheel(self.top_tree, self.top_tree.yview)
 
         right = ctk.CTkFrame(tables)
         right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
@@ -129,6 +131,7 @@ class ReportesView(ctk.CTkToplevel):
         dia_scroll = ttk.Scrollbar(dia_frame, orient="vertical", command=self.dia_tree.yview)
         dia_scroll.grid(row=0, column=1, sticky="ns")
         self.dia_tree.configure(yscrollcommand=dia_scroll.set)
+        bind_mousewheel(self.dia_tree, self.dia_tree.yview)
 
         status_frame = ctk.CTkFrame(self, fg_color="transparent")
         status_frame.pack(fill="x", padx=12, pady=(0, 6))

@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
+from ui.mousewheel import bind_mousewheel
 
 class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
@@ -120,6 +121,8 @@ class GastosDialog(ctk.CTkToplevel):
         
         self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
         scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
+
+        bind_mousewheel(self.tree, self.tree.yview)
 
     def _guardar(self):
         # 1. Obtención de datos

@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
 from ui.assets import load_logo
+from ui.mousewheel import bind_mousewheel
 
 
 class PropinasDialog(ctk.CTkToplevel):
@@ -121,6 +122,7 @@ class PropinasDialog(ctk.CTkToplevel):
         tree_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
         tree_scroll.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=tree_scroll.set)
+        bind_mousewheel(self.tree, self.tree.yview)
 
     def _on_mesero_selected(self, value: str):
         # Usa el nombre del menu como snapshot

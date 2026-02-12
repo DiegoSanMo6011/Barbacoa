@@ -6,6 +6,7 @@ import threading
 import customtkinter as ctk
 
 from services.printer import print_ticket_text
+from ui.mousewheel import bind_mousewheel
 
 class TicketPreview(ctk.CTkToplevel):
     def __init__(self, master, ticket_text: str, file_path: str | None = None):
@@ -28,6 +29,7 @@ class TicketPreview(ctk.CTkToplevel):
         y_scroll = ttk.Scrollbar(body, orient="vertical", command=self.text.yview)
         y_scroll.pack(side="right", fill="y", padx=(0, 8), pady=8)
         self.text.configure(yscrollcommand=y_scroll.set)
+        bind_mousewheel(self.text, self.text.yview)
         self.text.insert("1.0", ticket_text)
         self.text.configure(state="disabled")
 

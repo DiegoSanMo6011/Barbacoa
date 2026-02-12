@@ -27,6 +27,7 @@ from ui.ticket_preview import TicketPreview
 from ui.change_pin_dialog import ChangePinDialog
 from ui.messagebox_fix import install_messagebox_parenting
 from services.printer import print_ticket_text, should_autoprint
+from ui.mousewheel import bind_mousewheel
 
 
 class POSApp(tk.Tk):
@@ -351,14 +352,14 @@ class POSApp(tk.Tk):
             row=0, column=4, sticky="e"
         )
 
-        catalog_wrap = ttk.Frame(panel)
-        catalog_wrap.grid(row=2, column=0, sticky="nsew", padx=self._ui_px(8), pady=(0, self._ui_px(8)))
-        catalog_wrap.grid_columnconfigure(0, weight=1)
-        catalog_wrap.grid_rowconfigure(0, weight=1)
+        self.catalog_wrap = ttk.Frame(panel)
+        self.catalog_wrap.grid(row=2, column=0, sticky="nsew", padx=self._ui_px(8), pady=(0, self._ui_px(8)))
+        self.catalog_wrap.grid_columnconfigure(0, weight=1)
+        self.catalog_wrap.grid_rowconfigure(0, weight=1)
 
-        self.catalog_canvas = tk.Canvas(catalog_wrap, bg="#eef2ff", highlightthickness=0)
+        self.catalog_canvas = tk.Canvas(self.catalog_wrap, bg="#eef2ff", highlightthickness=0)
         self.catalog_canvas.grid(row=0, column=0, sticky="nsew")
-        self.catalog_scroll = ttk.Scrollbar(catalog_wrap, orient="vertical", command=self.catalog_canvas.yview)
+        self.catalog_scroll = ttk.Scrollbar(self.catalog_wrap, orient="vertical", command=self.catalog_canvas.yview)
         self.catalog_scroll.grid(row=0, column=1, sticky="ns")
         self.catalog_canvas.configure(yscrollcommand=self.catalog_scroll.set)
 
@@ -366,9 +367,9 @@ class POSApp(tk.Tk):
         self._catalog_window = self.catalog_canvas.create_window((0, 0), window=self.catalog_inner, anchor="nw")
         self.catalog_inner.bind("<Configure>", self._on_catalog_inner_configure)
         self.catalog_canvas.bind("<Configure>", self._on_catalog_canvas_configure)
-        self.catalog_canvas.bind("<MouseWheel>", self._on_catalog_mousewheel)
-        self.catalog_canvas.bind("<Button-4>", lambda _e: self.catalog_canvas.yview_scroll(-1, "units"))
-        self.catalog_canvas.bind("<Button-5>", lambda _e: self.catalog_canvas.yview_scroll(1, "units"))
+        bind_mousewheel(self.catalog_canvas, self.catalog_canvas.yview)
+        bind_mousewheel(self.catalog_inner, self.catalog_canvas.yview)
+        bind_mousewheel(self.catalog_wrap, self.catalog_canvas.yview)
         self.catalog_card_buttons: list[tk.Widget] = []
         self._selected_catalog_index = 0
 
@@ -655,6 +656,11 @@ class POSApp(tk.Tk):
         seed = sum(ord(ch) for ch in category.upper())
         return palette[seed % len(palette)]
 
+    def _bind_catalog_mousewheel(self, widget: tk.Misc) -> None:
+        bind_mousewheel(widget, self.catalog_canvas.yview)
+        for child in widget.winfo_children():
+            self._bind_catalog_mousewheel(child)
+
     def _product_badge(self, product: dict) -> str:
         nombre = str(product.get("nombre") or "").strip()
         if not nombre:
@@ -840,6 +846,7 @@ class POSApp(tk.Tk):
             )
             add_btn.pack(fill="x", padx=self._ui_px(6), pady=(0, self._ui_px(6)))
             self.catalog_card_buttons.append(add_btn)
+            self._bind_catalog_mousewheel(card)
 
             for widget in (card, top, badge, cat_chip, name_lbl, price_lbl):
                 widget.bind(
