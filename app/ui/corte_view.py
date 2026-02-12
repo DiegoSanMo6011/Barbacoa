@@ -29,8 +29,8 @@ class CorteView(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService, auth: AuthService | None = None):
         super().__init__(master)
         self.title("Corte de caja")
-        self.geometry("1120x760")
-        self.minsize(980, 660)
+        self.geometry("1220x820")
+        self.minsize(1040, 700)
         self.resizable(True, True)
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
@@ -43,7 +43,7 @@ class CorteView(ctk.CTkToplevel):
         self.fecha_var = tk.StringVar(value=date.today().isoformat())
         self.caja_chica_var = tk.StringVar(value="0.00")
         self.efectivo_contado_var = tk.StringVar()
-        self.diferencia_var = tk.StringVar(value="0.00")
+        self.diferencia_var = tk.StringVar(value="$0.00")
         self.estado_jornada_var = tk.StringVar(value="NO INICIADO")
         self.status_var = tk.StringVar(value="")
 
@@ -54,6 +54,9 @@ class CorteView(ctk.CTkToplevel):
         self.caja_chica_display_var = tk.StringVar(value="0.00")
         self.total_gastos_var = tk.StringVar(value="0.00")
         self.total_propinas_tarjeta_var = tk.StringVar(value="0.00")
+        self.total_propinas_efectivo_var = tk.StringVar(value="0.00")
+        self.total_propinas_reparto_var = tk.StringVar(value="0.00")
+        self.total_terminal_var = tk.StringVar(value="0.00")
         self.efectivo_teorico_var = tk.StringVar(value="0.00")
         self.neto_var = tk.StringVar(value="0.00")
 
@@ -99,25 +102,54 @@ class CorteView(ctk.CTkToplevel):
         jornada.grid_columnconfigure(5, weight=1)
 
         resumen = ctk.CTkFrame(self)
-        resumen.pack(fill="x", padx=12, pady=(0, 12))
-
-        def _row(label: str, var: tk.StringVar, r: int):
-            ctk.CTkLabel(resumen, text=label).grid(row=r, column=0, padx=6, pady=4, sticky="w")
-            ctk.CTkLabel(resumen, textvariable=var, font=("Arial", 13, "bold")).grid(
-                row=r, column=1, padx=6, pady=4, sticky="e"
-            )
-
-        _row("Total ventas:", self.total_ventas_var, 0)
-        _row("Ventas EFECTIVO:", self.ventas_efectivo_var, 1)
-        _row("Ventas TARJETA:", self.ventas_tarjeta_var, 2)
-        _row("Ventas TRANSFER:", self.ventas_transfer_var, 3)
-        _row("Caja chica inicial:", self.caja_chica_display_var, 4)
-        _row("Total gastos:", self.total_gastos_var, 5)
-        _row("Propinas TARJETA (terminal):", self.total_propinas_tarjeta_var, 6)
-        _row("Efectivo esperado en caja:", self.efectivo_teorico_var, 7)
-        _row("Neto:", self.neto_var, 8)
-
+        resumen.pack(fill="x", padx=12, pady=(0, 10))
+        resumen.grid_columnconfigure(0, weight=1)
         resumen.grid_columnconfigure(1, weight=1)
+
+        resumen_ventas = ctk.CTkFrame(resumen)
+        resumen_ventas.grid(row=0, column=0, padx=(0, 6), pady=0, sticky="nsew")
+        resumen_caja = ctk.CTkFrame(resumen)
+        resumen_caja.grid(row=0, column=1, padx=(6, 0), pady=0, sticky="nsew")
+
+        def _row(parent: ctk.CTkFrame, label: str, var: tk.StringVar, r: int, *, highlight: bool = False):
+            ctk.CTkLabel(parent, text=label).grid(row=r, column=0, padx=8, pady=4, sticky="w")
+            ctk.CTkLabel(
+                parent,
+                textvariable=var,
+                font=("Arial", 16 if highlight else 13, "bold"),
+                text_color="#111827" if highlight else None,
+            ).grid(row=r, column=1, padx=8, pady=4, sticky="e")
+
+        ctk.CTkLabel(resumen_ventas, text="Ventas y terminal", font=("Arial", 14, "bold")).grid(
+            row=0, column=0, columnspan=2, padx=8, pady=(8, 6), sticky="w"
+        )
+        _row(resumen_ventas, "Total ventas:", self.total_ventas_var, 1)
+        _row(resumen_ventas, "Ventas EFECTIVO:", self.ventas_efectivo_var, 2)
+        _row(resumen_ventas, "Ventas TARJETA:", self.ventas_tarjeta_var, 3)
+        _row(resumen_ventas, "Ventas TRANSFER:", self.ventas_transfer_var, 4)
+        _row(resumen_ventas, "Propinas TARJETA (terminal):", self.total_propinas_tarjeta_var, 5)
+        _row(resumen_ventas, "Total terminal (venta+propina):", self.total_terminal_var, 6, highlight=True)
+        ctk.CTkLabel(
+            resumen_ventas,
+            text="Total terminal = Ventas TARJETA + Propinas TARJETA",
+            text_color="#4b5563",
+        ).grid(row=7, column=0, columnspan=2, padx=8, pady=(2, 8), sticky="w")
+
+        ctk.CTkLabel(resumen_caja, text="Caja y resultado", font=("Arial", 14, "bold")).grid(
+            row=0, column=0, columnspan=2, padx=8, pady=(8, 6), sticky="w"
+        )
+        _row(resumen_caja, "Caja chica inicial:", self.caja_chica_display_var, 1)
+        _row(resumen_caja, "Total gastos:", self.total_gastos_var, 2)
+        _row(resumen_caja, "Efectivo esperado en caja:", self.efectivo_teorico_var, 3, highlight=True)
+        _row(resumen_caja, "Neto:", self.neto_var, 4)
+        ctk.CTkLabel(
+            resumen_caja,
+            text="Propinas en EFECTIVO: solo referencia, no afectan caja.",
+            text_color="#4b5563",
+        ).grid(row=5, column=0, columnspan=2, padx=8, pady=(2, 8), sticky="w")
+
+        resumen_ventas.grid_columnconfigure(1, weight=1)
+        resumen_caja.grid_columnconfigure(1, weight=1)
 
         efectivo_frame = ctk.CTkFrame(self)
         efectivo_frame.pack(fill="x", padx=12, pady=(0, 12))
@@ -134,38 +166,75 @@ class CorteView(ctk.CTkToplevel):
         self.efectivo_entry.bind("<KeyRelease>", lambda _e: self._update_diferencia())
         self.efectivo_entry.bind("<Return>", lambda _e: self._on_enter_efectivo())
 
-        ctk.CTkLabel(efectivo_frame, text="Diferencia:").grid(row=0, column=4, padx=6, pady=6, sticky="w")
-        ctk.CTkLabel(efectivo_frame, textvariable=self.diferencia_var, font=("Arial", 13, "bold")).grid(
-            row=0, column=5, padx=6, pady=6, sticky="w"
+        ctk.CTkLabel(efectivo_frame, text="Diferencia (contado - esperado):").grid(row=0, column=4, padx=6, pady=6, sticky="w")
+        self.diferencia_label = ctk.CTkLabel(
+            efectivo_frame,
+            textvariable=self.diferencia_var,
+            font=("Arial", 14, "bold"),
+            text_color="#92400e",
         )
+        self.diferencia_label.grid(row=0, column=5, padx=6, pady=6, sticky="w")
 
         propinas_frame = ctk.CTkFrame(self)
         propinas_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
         propinas_frame.grid_columnconfigure(0, weight=1)
-        propinas_frame.grid_rowconfigure(1, weight=1)
+        propinas_frame.grid_rowconfigure(3, weight=1)
         ctk.CTkLabel(
             propinas_frame,
-            text="Reparto propinas tarjeta por mesero",
-            font=("Arial", 13, "bold"),
+            text="Reparto de propinas por mesero",
+            font=("Arial", 14, "bold"),
         ).grid(row=0, column=0, padx=6, pady=(8, 4), sticky="w")
+        ctk.CTkLabel(
+            propinas_frame,
+            text="Esta sección indica exactamente cuánto pagar a cada mesero por TARJETA y por EFECTIVO.",
+            text_color="#4b5563",
+        ).grid(row=1, column=0, padx=6, pady=(0, 4), sticky="w")
+
+        propinas_totales = ctk.CTkFrame(propinas_frame, fg_color="#eef2ff")
+        propinas_totales.grid(row=2, column=0, padx=6, pady=(4, 8), sticky="ew")
+        propinas_totales.grid_columnconfigure(1, weight=1)
+        propinas_totales.grid_columnconfigure(3, weight=1)
+        propinas_totales.grid_columnconfigure(5, weight=1)
+        ctk.CTkLabel(propinas_totales, text="Tarjeta a pagar hoy:", font=("Arial", 12, "bold")).grid(
+            row=0, column=0, padx=(10, 6), pady=8, sticky="w"
+        )
+        ctk.CTkLabel(propinas_totales, textvariable=self.total_propinas_tarjeta_var, font=("Arial", 14, "bold")).grid(
+            row=0, column=1, padx=6, pady=8, sticky="w"
+        )
+        ctk.CTkLabel(propinas_totales, text="Efectivo a pagar hoy:", font=("Arial", 12, "bold")).grid(
+            row=0, column=2, padx=(18, 6), pady=8, sticky="w"
+        )
+        ctk.CTkLabel(propinas_totales, textvariable=self.total_propinas_efectivo_var, font=("Arial", 14, "bold")).grid(
+            row=0, column=3, padx=6, pady=8, sticky="w"
+        )
+        ctk.CTkLabel(propinas_totales, text="Total a repartir:", font=("Arial", 12, "bold")).grid(
+            row=0, column=4, padx=(18, 6), pady=8, sticky="w"
+        )
+        ctk.CTkLabel(propinas_totales, textvariable=self.total_propinas_reparto_var, font=("Arial", 15, "bold")).grid(
+            row=0, column=5, padx=6, pady=8, sticky="w"
+        )
 
         table_frame = ctk.CTkFrame(propinas_frame)
-        table_frame.grid(row=1, column=0, padx=6, pady=(0, 8), sticky="nsew")
+        table_frame.grid(row=3, column=0, padx=6, pady=(0, 8), sticky="nsew")
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(0, weight=1)
 
         self.propinas_tree = ttk.Treeview(
             table_frame,
-            columns=("mesero", "num_tarjeta", "total_tarjeta"),
+            columns=("mesero", "total_tarjeta", "total_efectivo", "total_pagar", "instruccion"),
             show="headings",
             height=6,
         )
-        self.propinas_tree.heading("mesero", text="Mesero")
-        self.propinas_tree.heading("num_tarjeta", text="#Tarjeta")
-        self.propinas_tree.heading("total_tarjeta", text="Total Tarjeta")
-        self.propinas_tree.column("mesero", width=320, anchor="w")
-        self.propinas_tree.column("num_tarjeta", width=110, anchor="center")
-        self.propinas_tree.column("total_tarjeta", width=160, anchor="e")
+        self.propinas_tree.heading("mesero", text="Mesero", anchor="center")
+        self.propinas_tree.heading("total_tarjeta", text="Tarjeta", anchor="center")
+        self.propinas_tree.heading("total_efectivo", text="Efectivo", anchor="center")
+        self.propinas_tree.heading("total_pagar", text="Total a pagar", anchor="center")
+        self.propinas_tree.heading("instruccion", text="Indicacion de pago", anchor="center")
+        self.propinas_tree.column("mesero", width=260, anchor="center")
+        self.propinas_tree.column("total_tarjeta", width=140, anchor="center")
+        self.propinas_tree.column("total_efectivo", width=140, anchor="center")
+        self.propinas_tree.column("total_pagar", width=150, anchor="center")
+        self.propinas_tree.column("instruccion", width=460, anchor="center")
         self.propinas_tree.grid(row=0, column=0, sticky="nsew")
 
         propinas_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.propinas_tree.yview)
@@ -223,6 +292,8 @@ class CorteView(ctk.CTkToplevel):
             "ventas_transfer": float(ventas.get("TRANSFER") or 0),
             "total_gastos": gastos_total,
             "total_propinas_tarjeta": float(propinas_resumen.get("total_propinas_tarjeta") or 0),
+            "total_propinas_efectivo": float(propinas_resumen.get("total_propinas_efectivo") or 0),
+            "total_propinas_reparto": float(propinas_resumen.get("total_propinas_reparto") or 0),
             "propinas_tarjeta_detalle": list(propinas_resumen.get("detalle") or []),
             "caja_chica_inicial": self._parse_amount(self.caja_chica_var.get(), default=0.0),
             "neto": 0.0,
@@ -252,8 +323,16 @@ class CorteView(ctk.CTkToplevel):
                 self.status_var.set(f"Día cerrado. Reaperturas: {reaperturas}.")
                 # En jornada cerrada mostramos snapshot inmutable del cierre.
                 self._last["total_propinas_tarjeta"] = float(corte.get("total_propinas_tarjeta") or 0)
-                self._last["propinas_tarjeta_detalle"] = self._normalized_propinas_detalle(
-                    corte.get("propinas_tarjeta_detalle")
+                detalle = self._normalized_propinas_detalle(corte.get("propinas_tarjeta_detalle"))
+                self._last["propinas_tarjeta_detalle"] = detalle
+                self._last["total_propinas_efectivo"] = round(
+                    sum(float(item.get("total_efectivo") or 0) for item in detalle),
+                    2,
+                )
+                self._last["total_propinas_reparto"] = round(
+                    float(self._last.get("total_propinas_tarjeta") or 0)
+                    + float(self._last.get("total_propinas_efectivo") or 0),
+                    2,
                 )
             self.caja_chica_var.set(f"{float(corte.get('caja_chica_inicial') or 0):.2f}")
             if estado == ESTADO_CERRADO:
@@ -269,7 +348,7 @@ class CorteView(ctk.CTkToplevel):
     def _normalized_propinas_detalle(self, raw: object) -> list[dict]:
         if not isinstance(raw, list):
             return []
-        rows: list[dict] = []
+        agg: dict[str, dict] = {}
         for item in raw:
             if not isinstance(item, dict):
                 continue
@@ -282,13 +361,38 @@ class CorteView(ctk.CTkToplevel):
                 total_tarjeta = float(item.get("total_tarjeta") or 0)
             except Exception:
                 total_tarjeta = 0.0
-            rows.append(
+            try:
+                num_efectivo = int(item.get("num_efectivo") or 0)
+            except Exception:
+                num_efectivo = 0
+            try:
+                total_efectivo = float(item.get("total_efectivo") or 0)
+            except Exception:
+                total_efectivo = 0.0
+            key = mesero.lower()
+            base = agg.get(
+                key,
                 {
                     "mesero": mesero,
-                    "num_tarjeta": max(0, num_tarjeta),
-                    "total_tarjeta": round(max(0.0, total_tarjeta), 2),
-                }
+                    "num_tarjeta": 0,
+                    "total_tarjeta": 0.0,
+                    "num_efectivo": 0,
+                    "total_efectivo": 0.0,
+                    "total_pagar": 0.0,
+                },
             )
+            base["num_tarjeta"] += max(0, num_tarjeta)
+            base["total_tarjeta"] += round(max(0.0, total_tarjeta), 2)
+            base["num_efectivo"] += max(0, num_efectivo)
+            base["total_efectivo"] += round(max(0.0, total_efectivo), 2)
+            agg[key] = base
+
+        rows = list(agg.values())
+        for row in rows:
+            row["total_tarjeta"] = round(float(row.get("total_tarjeta") or 0), 2)
+            row["total_efectivo"] = round(float(row.get("total_efectivo") or 0), 2)
+            row["total_pagar"] = round(row["total_tarjeta"] + row["total_efectivo"], 2)
+        rows.sort(key=lambda x: (-float(x.get("total_pagar") or 0), x.get("mesero") or ""))
         return rows
 
     def _render_propinas_detalle(self):
@@ -296,13 +400,26 @@ class CorteView(ctk.CTkToplevel):
             self.propinas_tree.delete(row)
         detalle = self._normalized_propinas_detalle(self._last.get("propinas_tarjeta_detalle"))
         for item in detalle:
+            total_tarjeta = float(item.get("total_tarjeta") or 0)
+            total_efectivo = float(item.get("total_efectivo") or 0)
+            total_pagar = float(item.get("total_pagar") or 0)
+            if total_tarjeta > 0 and total_efectivo > 0:
+                instruccion = f"Pagar ${total_pagar:.2f}: ${total_tarjeta:.2f} tarjeta + ${total_efectivo:.2f} efectivo"
+            elif total_tarjeta > 0:
+                instruccion = f"Pagar ${total_pagar:.2f} de propina tarjeta"
+            elif total_efectivo > 0:
+                instruccion = f"Pagar ${total_pagar:.2f} de propina efectivo"
+            else:
+                instruccion = "Sin pago de propinas"
             self.propinas_tree.insert(
                 "",
                 "end",
                 values=(
                     item.get("mesero") or "Sin nombre",
-                    int(item.get("num_tarjeta") or 0),
-                    f"${float(item.get('total_tarjeta') or 0):.2f}",
+                    f"${total_tarjeta:.2f}",
+                    f"${total_efectivo:.2f}",
+                    f"${total_pagar:.2f}",
+                    instruccion,
                 ),
             )
 
@@ -328,7 +445,20 @@ class CorteView(ctk.CTkToplevel):
         ventas_tarjeta = float(self._last.get("ventas_tarjeta") or 0)
         ventas_transfer = float(self._last.get("ventas_transfer") or 0)
         gastos_total = float(self._last.get("total_gastos") or 0)
+        detalle_propinas = self._normalized_propinas_detalle(self._last.get("propinas_tarjeta_detalle"))
         propinas_tarjeta_total = float(self._last.get("total_propinas_tarjeta") or 0)
+        propinas_efectivo_total = float(self._last.get("total_propinas_efectivo") or 0)
+        if detalle_propinas:
+            propinas_tarjeta_total = round(
+                sum(float(item.get("total_tarjeta") or 0) for item in detalle_propinas),
+                2,
+            )
+            propinas_efectivo_total = round(
+                sum(float(item.get("total_efectivo") or 0) for item in detalle_propinas),
+                2,
+            )
+        propinas_reparto_total = round(propinas_tarjeta_total + propinas_efectivo_total, 2)
+        total_terminal = ventas_tarjeta + propinas_tarjeta_total
 
         neto = total_ventas - gastos_total
         efectivo_teorico = calc_efectivo_teorico(
@@ -341,6 +471,10 @@ class CorteView(ctk.CTkToplevel):
         self._last["caja_chica_inicial"] = caja_chica
         self._last["neto"] = neto
         self._last["efectivo_teorico"] = efectivo_teorico
+        self._last["total_propinas_tarjeta"] = propinas_tarjeta_total
+        self._last["total_propinas_efectivo"] = propinas_efectivo_total
+        self._last["total_propinas_reparto"] = propinas_reparto_total
+        self._last["propinas_tarjeta_detalle"] = detalle_propinas
 
         self.total_ventas_var.set(f"${total_ventas:.2f}")
         self.ventas_efectivo_var.set(f"${ventas_efectivo:.2f}")
@@ -349,6 +483,9 @@ class CorteView(ctk.CTkToplevel):
         self.caja_chica_display_var.set(f"${caja_chica:.2f}")
         self.total_gastos_var.set(f"${gastos_total:.2f}")
         self.total_propinas_tarjeta_var.set(f"${propinas_tarjeta_total:.2f}")
+        self.total_propinas_efectivo_var.set(f"${propinas_efectivo_total:.2f}")
+        self.total_propinas_reparto_var.set(f"${propinas_reparto_total:.2f}")
+        self.total_terminal_var.set(f"${total_terminal:.2f}")
         self.efectivo_teorico_var.set(f"${efectivo_teorico:.2f}")
         self.neto_var.set(f"${neto:.2f}")
         self._render_propinas_detalle()
@@ -358,12 +495,19 @@ class CorteView(ctk.CTkToplevel):
         try:
             efectivo_contado = float(self.efectivo_contado_var.get().strip() or 0)
         except Exception:
-            self.diferencia_var.set("0.00")
+            self.diferencia_var.set("$0.00")
+            self.diferencia_label.configure(text_color="#92400e")
             return
 
         efectivo_teorico = float(self._last.get("efectivo_teorico") or 0)
         diff = calc_diferencia(efectivo_contado, efectivo_teorico)
-        self.diferencia_var.set(f"{diff:.2f}")
+        self.diferencia_var.set(f"${diff:+.2f}")
+        if diff > 0:
+            self.diferencia_label.configure(text_color="#166534")
+        elif diff < 0:
+            self.diferencia_label.configure(text_color="#b91c1c")
+        else:
+            self.diferencia_label.configure(text_color="#92400e")
 
     def _is_duenio(self) -> bool:
         if not self.auth:
