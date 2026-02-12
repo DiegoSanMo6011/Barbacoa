@@ -330,9 +330,17 @@ class Gasto(MovimientoCaja):
         categoria_limpia = _clean_text(categoria)
         if not categoria_limpia:
             raise ValueError("categoria es obligatoria")
-        metodo_limpio = _clean_text(metodo_pago)
+        metodo_limpio = _clean_text(metodo_pago).upper()
         if not metodo_limpio:
             raise ValueError("metodo_pago es obligatorio")
+        if metodo_limpio == "TRANSFERENCIA":
+            metodo_limpio = MetodoPago.TRANSFER.value
+        if metodo_limpio not in {
+            MetodoPago.EFECTIVO.value,
+            MetodoPago.TARJETA.value,
+            MetodoPago.TRANSFER.value,
+        }:
+            raise ValueError(f"metodo_pago invalido: {metodo_pago}")
         if monto is None or float(monto) <= 0:
             raise ValueError("monto debe ser > 0")
         return cls(
@@ -344,13 +352,15 @@ class Gasto(MovimientoCaja):
         )
 
     def to_record(self) -> dict:
-        return {
+        record = {
             "concepto": _clean_text(self.concepto),
             "categoria": _clean_text(self.categoria),
             "monto": self.monto_redondeado(),
-            "nota": _clean_text(self.nota) if self.nota else None,
             "metodo_pago": _clean_text(self.metodo_pago),
         }
+        if self.nota:
+            record["nota"] = _clean_text(self.nota)
+        return record
 
 
 @dataclass(slots=True)
