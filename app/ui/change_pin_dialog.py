@@ -16,8 +16,9 @@ class ChangePinDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService, auth: AuthService, role: Role):
         super().__init__(master)
         self.title("Cambiar mi PIN")
-        self.geometry("560x300")
-        self.resizable(False, False)
+        self.geometry("640x360")
+        self.minsize(560, 300)
+        self.resizable(True, True)
         self.grab_set()
 
         self.db = supabase

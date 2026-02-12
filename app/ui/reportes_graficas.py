@@ -17,8 +17,9 @@ class ReportesGraficas(ctk.CTkToplevel):
     ):
         super().__init__(master)
         self.title("Gráficas")
-        self.geometry("980x640")
-        self.resizable(False, False)
+        self.geometry("1120x760")
+        self.minsize(980, 640)
+        self.resizable(True, True)
         # Evita conflicto de grab con la ventana Reportes
 
         self.fecha_inicio = fecha_inicio

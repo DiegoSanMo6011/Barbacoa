@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta, datetime
 import csv
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
@@ -21,8 +22,9 @@ class ReportesView(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
         self.title("Reportes")
-        self.geometry("920x620")
-        self.resizable(False, False)
+        self.geometry("1160x760")
+        self.minsize(1040, 680)
+        self.resizable(True, True)
         self.grab_set()
 
         self.db = supabase
@@ -53,18 +55,20 @@ class ReportesView(ctk.CTkToplevel):
             tk.Label(header, image=self.logo_img, bg="#1f2937").pack(side="left", padx=(12, 8), pady=10)
         ctk.CTkLabel(header, text="REPORTES", font=("Arial", 18, "bold"), text_color="white").pack(side="left", padx=6, pady=10)
 
-        date_row = ctk.CTkFrame(header, fg_color="transparent")
-        date_row.pack(side="right", padx=12)
-        ctk.CTkLabel(date_row, text="Inicio:").pack(side="left", padx=6)
-        ctk.CTkEntry(date_row, textvariable=self.fecha_inicio_var, width=120).pack(side="left", padx=6)
-        ctk.CTkLabel(date_row, text="Fin:").pack(side="left", padx=6)
-        ctk.CTkEntry(date_row, textvariable=self.fecha_fin_var, width=120).pack(side="left", padx=6)
-        ttk.Button(date_row, text="Cargar", command=self._load_reportes).pack(side="left", padx=6)
-        ttk.Button(date_row, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
-        ttk.Button(date_row, text="Gráficas", command=self._open_graficas).pack(side="left", padx=6)
+        filters = ctk.CTkFrame(self)
+        filters.pack(fill="x", padx=12, pady=(12, 8))
+        for col in range(9):
+            filters.grid_columnconfigure(col, weight=(1 if col in {1, 3, 8} else 0))
+        ctk.CTkLabel(filters, text="Inicio:").grid(row=0, column=0, padx=(8, 6), pady=8, sticky="w")
+        ctk.CTkEntry(filters, textvariable=self.fecha_inicio_var, width=140).grid(row=0, column=1, padx=6, pady=8, sticky="ew")
+        ctk.CTkLabel(filters, text="Fin:").grid(row=0, column=2, padx=(12, 6), pady=8, sticky="w")
+        ctk.CTkEntry(filters, textvariable=self.fecha_fin_var, width=140).grid(row=0, column=3, padx=6, pady=8, sticky="ew")
+        ttk.Button(filters, text="Cargar", command=self._load_reportes).grid(row=0, column=4, padx=6, pady=8, sticky="ew")
+        ttk.Button(filters, text="Exportar CSV", command=self._export_csv).grid(row=0, column=5, padx=6, pady=8, sticky="ew")
+        ttk.Button(filters, text="Gráficas", command=self._open_graficas).grid(row=0, column=6, padx=6, pady=8, sticky="ew")
 
         resumen = ctk.CTkFrame(self)
-        resumen.pack(fill="x", padx=12, pady=(12, 12))
+        resumen.pack(fill="x", padx=12, pady=(0, 12))
 
         def _row(label: str, var: tk.StringVar, r: int):
             ctk.CTkLabel(resumen, text=label).grid(row=r, column=0, padx=6, pady=4, sticky="w")
@@ -80,42 +84,56 @@ class ReportesView(ctk.CTkToplevel):
 
         tables = ctk.CTkFrame(self)
         tables.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        tables.grid_columnconfigure(0, weight=1)
+        tables.grid_columnconfigure(1, weight=1)
+        tables.grid_rowconfigure(0, weight=1)
 
         left = ctk.CTkFrame(tables)
-        left.pack(side="left", fill="both", expand=True, padx=(0, 6))
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        left.grid_rowconfigure(1, weight=1)
+        left.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(left, text="Top productos", font=("Arial", 13, "bold")).pack(anchor="w", padx=6, pady=(6, 0))
+        ctk.CTkLabel(left, text="Top productos", font=("Arial", 13, "bold")).grid(row=0, column=0, sticky="w", padx=6, pady=(6, 0))
         top_frame = ctk.CTkFrame(left)
-        top_frame.pack(fill="both", expand=True, padx=6, pady=6)
+        top_frame.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
+        top_frame.grid_rowconfigure(0, weight=1)
+        top_frame.grid_columnconfigure(0, weight=1)
         self.top_tree = ttk.Treeview(top_frame, columns=("producto", "cantidad", "total"), show="headings", height=10)
         self.top_tree.heading("producto", text="Producto")
         self.top_tree.heading("cantidad", text="Cantidad")
         self.top_tree.heading("total", text="Total")
-        self.top_tree.column("producto", width=260, anchor="w")
+        self.top_tree.column("producto", width=320, anchor="w")
         self.top_tree.column("cantidad", width=80, anchor="center")
         self.top_tree.column("total", width=100, anchor="e")
-        self.top_tree.pack(fill="both", expand=True)
+        self.top_tree.grid(row=0, column=0, sticky="nsew")
+        top_scroll = ttk.Scrollbar(top_frame, orient="vertical", command=self.top_tree.yview)
+        top_scroll.grid(row=0, column=1, sticky="ns")
+        self.top_tree.configure(yscrollcommand=top_scroll.set)
 
         right = ctk.CTkFrame(tables)
-        right.pack(side="right", fill="both", expand=True, padx=(6, 0))
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        right.grid_rowconfigure(1, weight=1)
+        right.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(right, text="Ventas por día", font=("Arial", 13, "bold")).pack(anchor="w", padx=6, pady=(6, 0))
+        ctk.CTkLabel(right, text="Ventas por día", font=("Arial", 13, "bold")).grid(row=0, column=0, sticky="w", padx=6, pady=(6, 0))
         dia_frame = ctk.CTkFrame(right)
-        dia_frame.pack(fill="both", expand=True, padx=6, pady=6)
+        dia_frame.grid(row=1, column=0, sticky="nsew", padx=6, pady=6)
+        dia_frame.grid_rowconfigure(0, weight=1)
+        dia_frame.grid_columnconfigure(0, weight=1)
         self.dia_tree = ttk.Treeview(dia_frame, columns=("fecha", "total"), show="headings", height=10)
         self.dia_tree.heading("fecha", text="Fecha")
         self.dia_tree.heading("total", text="Total")
         self.dia_tree.column("fecha", width=140, anchor="center")
         self.dia_tree.column("total", width=120, anchor="e")
-        self.dia_tree.pack(fill="both", expand=True)
+        self.dia_tree.grid(row=0, column=0, sticky="nsew")
+        dia_scroll = ttk.Scrollbar(dia_frame, orient="vertical", command=self.dia_tree.yview)
+        dia_scroll.grid(row=0, column=1, sticky="ns")
+        self.dia_tree.configure(yscrollcommand=dia_scroll.set)
 
         status_frame = ctk.CTkFrame(self, fg_color="transparent")
         status_frame.pack(fill="x", padx=12, pady=(0, 6))
         ctk.CTkLabel(status_frame, textvariable=self.status_var).pack(side="left", padx=6)
 
-        actions = ctk.CTkFrame(self, fg_color="transparent")
-        actions.pack(fill="x", padx=12, pady=(0, 12))
-        ttk.Button(actions, text="Exportar CSV", command=self._export_csv).pack(side="left", padx=6)
 
     def _parse_fecha(self, value: str) -> date | None:
         try:

@@ -13,8 +13,9 @@ class CierreDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
         self.title("Cierre de caja")
-        self.geometry("760x520")
-        self.resizable(False, False)
+        self.geometry("980x660")
+        self.minsize(860, 560)
+        self.resizable(True, True)
         self.grab_set()
 
         self.db = supabase

@@ -13,8 +13,9 @@ class PropinasDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
         self.title("Propinas")
-        self.geometry("820x560")
-        self.resizable(False, False)
+        self.geometry("980x680")
+        self.minsize(900, 620)
+        self.resizable(True, True)
         self.grab_set()
 
         self.db = supabase
@@ -42,6 +43,8 @@ class PropinasDialog(ctk.CTkToplevel):
 
         sec_a = ctk.CTkFrame(self)
         sec_a.pack(fill="x", padx=12, pady=12)
+        sec_a.grid_columnconfigure(1, weight=1)
+        sec_a.grid_columnconfigure(3, weight=1)
         ctk.CTkLabel(sec_a, text="Registrar propina", font=("Arial", 14, "bold")).grid(
             row=0, column=0, columnspan=4, padx=6, pady=(6, 10), sticky="w"
         )
@@ -55,8 +58,9 @@ class PropinasDialog(ctk.CTkToplevel):
             values=[],
             variable=self.mesero_var,
             command=self._on_mesero_selected,
+            width=220,
         )
-        self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="w")
+        self.mesero_menu.grid(row=1, column=3, padx=6, pady=6, sticky="ew")
 
         ctk.CTkLabel(sec_a, text="Origen:").grid(row=2, column=0, padx=6, pady=6, sticky="w")
         self.origen_menu = ctk.CTkOptionMenu(
@@ -65,10 +69,10 @@ class PropinasDialog(ctk.CTkToplevel):
             variable=self.fuente_var,
             width=160,
         )
-        self.origen_menu.grid(row=2, column=1, padx=6, pady=6, sticky="w")
+        self.origen_menu.grid(row=2, column=1, padx=6, pady=6, sticky="ew")
 
         ttk.Button(sec_a, text="Guardar", style="Accent.TButton", command=self._guardar_propina).grid(
-            row=2, column=3, padx=6, pady=6, sticky="e"
+            row=2, column=3, padx=6, pady=6, sticky="ew"
         )
 
         # Section B: reporte diario
@@ -92,6 +96,8 @@ class PropinasDialog(ctk.CTkToplevel):
         table_frame.grid(row=2, column=0, columnspan=5, padx=6, pady=8, sticky="nsew")
         sec_b.grid_rowconfigure(2, weight=1)
         sec_b.grid_columnconfigure(4, weight=1)
+        table_frame.grid_rowconfigure(0, weight=1)
+        table_frame.grid_columnconfigure(0, weight=1)
 
         self.tree = ttk.Treeview(
             table_frame,
@@ -105,13 +111,16 @@ class PropinasDialog(ctk.CTkToplevel):
         self.tree.heading("total", text="Total")
         self.tree.heading("num", text="#Registros")
 
-        self.tree.column("mesero", width=260, anchor="w")
+        self.tree.column("mesero", width=300, anchor="w")
         self.tree.column("tarjeta_num", width=90, anchor="center")
         self.tree.column("tarjeta_total", width=140, anchor="e")
         self.tree.column("total", width=120, anchor="e")
         self.tree.column("num", width=120, anchor="center")
 
-        self.tree.pack(fill="both", expand=True)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        tree_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        tree_scroll.grid(row=0, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=tree_scroll.set)
 
     def _on_mesero_selected(self, value: str):
         # Usa el nombre del menu como snapshot
