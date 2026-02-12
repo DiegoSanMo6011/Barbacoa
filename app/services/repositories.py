@@ -47,6 +47,13 @@ class SupabaseTable(ABC):
         res = self._table().update(payload).eq(key, value).execute()
         return res.data[0]
 
+    def _delete_one(self, key: str, value: Any) -> dict | None:
+        res = self._table().delete().eq(key, value).execute()
+        rows = res.data or []
+        if not rows:
+            return None
+        return rows[0]
+
 
 class ProductosRepository(SupabaseTable):
     table_name = "productos"
@@ -140,6 +147,9 @@ class MeserosRepository(SupabaseTable):
     def update_fields(self, mesero_id: str, changes: dict) -> Mesero:
         updated = self._update_one(changes, "id", mesero_id)
         return Mesero.from_record(updated)
+
+    def delete(self, mesero_id: str) -> None:
+        self._delete_one("id", mesero_id)
 
 
 class ComandasRepository(SupabaseTable):

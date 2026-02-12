@@ -244,8 +244,8 @@ class SupabaseService(OfflineSync):
         meseros = self.meseros_repo.list_all()
         return [m.to_record() for m in meseros]
 
-    def crear_mesero(self, nombre: str) -> dict:
-        mesero = Mesero.from_inputs(nombre=nombre, activo=True)
+    def crear_mesero(self, nombre: str, activo: bool = True) -> dict:
+        mesero = Mesero.from_inputs(nombre=nombre, activo=activo)
         creado = self.meseros_repo.create(mesero)
         return creado.to_record()
 
@@ -264,6 +264,11 @@ class SupabaseService(OfflineSync):
 
         actualizado = self.meseros_repo.update_fields(mesero_id, changes)
         return actualizado.to_record()
+
+    def eliminar_mesero(self, mesero_id: str) -> None:
+        if not mesero_id:
+            raise ValueError("mesero_id es obligatorio")
+        self.meseros_repo.delete(mesero_id)
 
     # ---------------- Propinas ----------------
     def crear_propina(
