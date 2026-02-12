@@ -9,6 +9,9 @@ from ui.assets import load_logo
 
 
 class ProductosDialog(ctk.CTkToplevel):
+    AUTO_SCROLL_INTERVAL_MS = 130
+    AUTO_SCROLL_EDGE_MARGIN_PX = 18
+
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
         self.title("Catálogo - Productos")
@@ -22,7 +25,7 @@ class ProductosDialog(ctk.CTkToplevel):
         self.nombre_var = tk.StringVar()
         self.categoria_var = tk.StringVar(value="GENERAL")
         self.precio_var = tk.StringVar()
-        self.orden_var = tk.StringVar(value="10")
+        self.orden_var = tk.StringVar(value="1")
         self.activo_var = tk.BooleanVar(value=True)
         self.venta_por_gramo_var = tk.BooleanVar(value=False)
         self.search_var = tk.StringVar()
@@ -31,6 +34,11 @@ class ProductosDialog(ctk.CTkToplevel):
         self._rows: list[dict] = []
         self._drag_source_id: str | None = None
         self._drag_start_y = 0
+        self._drag_active = False
+        self._drag_reorder_allowed = True
+        self._drag_filter_warned = False
+        self._auto_scroll_job: str | None = None
+        self._auto_scroll_direction = 0
 
         self._build_ui()
         self._load_productos()
@@ -135,6 +143,7 @@ class ProductosDialog(ctk.CTkToplevel):
 
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
         self.tree.bind("<ButtonPress-1>", self._on_tree_press, add="+")
+        self.tree.bind("<B1-Motion>", self._on_tree_drag, add="+")
         self.tree.bind("<ButtonRelease-1>", self._on_tree_release, add="+")
 
         self.bind("<Control-Up>", self._shortcut_move_up)
@@ -149,7 +158,7 @@ class ProductosDialog(ctk.CTkToplevel):
         ctk.CTkLabel(status, textvariable=self.status_var, text_color="#475569").pack(side="left", padx=6)
         ctk.CTkLabel(
             status,
-            text="Tip: arrastra para reordenar. Atajos: Ctrl+↑/↓, Ctrl+Shift+↑/↓, Ctrl+F, Esc.",
+            text="Tip: arrastra para reordenar (autoscroll en bordes). Atajos: Ctrl+↑/↓, Ctrl+Shift+↑/↓, Ctrl+F, Esc.",
             text_color="#64748b",
         ).pack(side="right", padx=6)
 
@@ -210,6 +219,7 @@ class ProductosDialog(ctk.CTkToplevel):
         visible = len(self.tree.get_children())
         total = len(self._rows)
         self.status_var.set(f"{visible} visibles de {total} productos.")
+        self._refresh_tree_order_labels()
 
     def _filtered_rows(self) -> list[dict]:
         q = (self.search_var.get() or "").strip().lower()
@@ -415,6 +425,125 @@ class ProductosDialog(ctk.CTkToplevel):
             self.tree.focus(sid)
         self.status_var.set("Orden de catálogo actualizado.")
 
+    def _refresh_tree_order_labels(self):
+        for idx, iid in enumerate(self.tree.get_children("")):
+            values = list(self.tree.item(iid, "values"))
+            if not values:
+                continue
+            values[0] = idx + 1
+            self.tree.item(iid, values=values)
+
+    def _rows_from_tree_order(self) -> list[dict]:
+        by_id = {int(row.get("id")): row for row in self._rows}
+        ordered_rows: list[dict] = []
+        for iid in self.tree.get_children(""):
+            row = by_id.get(int(iid))
+            if row is not None:
+                ordered_rows.append(row)
+        return ordered_rows
+
+    def _cancel_auto_scroll(self):
+        if self._auto_scroll_job is not None:
+            self.after_cancel(self._auto_scroll_job)
+            self._auto_scroll_job = None
+        self._auto_scroll_direction = 0
+
+    def _schedule_auto_scroll(self):
+        if self._auto_scroll_job is not None or self._auto_scroll_direction == 0:
+            return
+        self._auto_scroll_job = self.after(self.AUTO_SCROLL_INTERVAL_MS, self._auto_scroll_tick)
+
+    def _update_auto_scroll_direction(self, y_pos: int):
+        margin = self.AUTO_SCROLL_EDGE_MARGIN_PX
+        height = max(1, self.tree.winfo_height())
+        direction = 0
+        if y_pos <= margin:
+            direction = -1
+        elif y_pos >= (height - margin):
+            direction = 1
+
+        if direction == self._auto_scroll_direction:
+            return
+        self._auto_scroll_direction = direction
+        if direction == 0:
+            self._cancel_auto_scroll()
+            return
+        self._schedule_auto_scroll()
+
+    def _move_drag_source_relative_to(self, target_id: str, *, insert_after: bool):
+        source_id = self._drag_source_id
+        if not source_id or source_id == target_id:
+            return
+
+        children = list(self.tree.get_children(""))
+        if source_id not in children or target_id not in children:
+            return
+
+        source_idx = children.index(source_id)
+        target_idx = children.index(target_id) + (1 if insert_after else 0)
+        if target_idx > source_idx:
+            target_idx -= 1
+        if target_idx == source_idx:
+            return
+
+        self.tree.move(source_id, "", target_idx)
+        self._retag_tree_rows()
+        self._refresh_tree_order_labels()
+        self.tree.selection_set(source_id)
+        self.tree.focus(source_id)
+
+    def _retag_tree_rows(self):
+        for idx, iid in enumerate(self.tree.get_children("")):
+            self.tree.item(iid, tags=("even" if idx % 2 == 0 else "odd",))
+
+    def _move_drag_source_to_pointer(self, y_pos: int):
+        children = list(self.tree.get_children(""))
+        if not children:
+            return
+
+        target_id = self.tree.identify_row(y_pos)
+        if not target_id:
+            if y_pos < 0:
+                target_id = children[0]
+                insert_after = False
+            else:
+                target_id = children[-1]
+                insert_after = True
+        else:
+            bbox = self.tree.bbox(target_id)
+            insert_after = False
+            if bbox:
+                _, top, _, height = bbox
+                insert_after = y_pos > (top + height / 2)
+
+        self._move_drag_source_relative_to(target_id, insert_after=insert_after)
+
+        source_id = self._drag_source_id
+        if source_id and source_id in self.tree.get_children(""):
+            pos = list(self.tree.get_children("")).index(source_id) + 1
+            self.status_var.set(f"Reordenando... posición previa: {pos}.")
+
+    def _auto_scroll_tick(self):
+        self._auto_scroll_job = None
+        if not self._drag_source_id or self._auto_scroll_direction == 0:
+            return
+
+        self.tree.yview_scroll(self._auto_scroll_direction, "units")
+        edge_y = 2 if self._auto_scroll_direction < 0 else max(0, self.tree.winfo_height() - 2)
+        edge_target = self.tree.identify_row(edge_y)
+        if edge_target:
+            self._move_drag_source_relative_to(edge_target, insert_after=self._auto_scroll_direction > 0)
+        self._schedule_auto_scroll()
+
+    def _reset_drag_state(self):
+        self._cancel_auto_scroll()
+        self._drag_source_id = None
+        self._drag_start_y = 0
+        self._drag_active = False
+        self._drag_reorder_allowed = True
+        self._drag_filter_warned = False
+        self.tree.configure(cursor="")
+
     def _shortcut_move_up(self, _event=None):
         self._move_up()
         return "break"
@@ -440,40 +569,53 @@ class ProductosDialog(ctk.CTkToplevel):
         return "break"
 
     def _on_tree_press(self, event):
+        self._cancel_auto_scroll()
         row_id = self.tree.identify_row(event.y)
         self._drag_source_id = row_id or None
         self._drag_start_y = int(event.y)
+        self._drag_active = False
+        self._drag_reorder_allowed = not self._has_active_filters()
+        self._drag_filter_warned = False
+        if row_id:
+            self.tree.selection_set(row_id)
+            self.tree.focus(row_id)
 
-    def _on_tree_release(self, event):
+    def _on_tree_drag(self, event):
         if not self._drag_source_id:
-            return
-        source = self._drag_source_id
-        self._drag_source_id = None
-        if not self._ensure_reorder_context():
             return
         if abs(int(event.y) - self._drag_start_y) < 6:
             return
-        target = self.tree.identify_row(event.y)
-        if not target or target == source:
+        if not self._drag_reorder_allowed:
+            if not self._drag_filter_warned:
+                self._drag_filter_warned = True
+                self._ensure_reorder_context()
+            self._reset_drag_state()
             return
-        source_id = int(source)
-        target_id = int(target)
-        source_idx = None
-        target_idx = None
-        for idx, row in enumerate(self._rows):
-            rid = int(row.get("id"))
-            if rid == source_id:
-                source_idx = idx
-            if rid == target_id:
-                target_idx = idx
-        if source_idx is None or target_idx is None:
+
+        self._drag_active = True
+        self.tree.configure(cursor="fleur")
+        self._update_auto_scroll_direction(int(event.y))
+        self._move_drag_source_to_pointer(int(event.y))
+        return "break"
+
+    def _on_tree_release(self, event):
+        source = self._drag_source_id
+        drag_active = self._drag_active
+        self._reset_drag_state()
+        if not source or not drag_active:
             return
-        rows = list(self._rows)
-        moved = rows.pop(source_idx)
-        if source_idx < target_idx:
-            target_idx -= 1
-        rows.insert(target_idx, moved)
-        self._persist_order(rows, source_id)
+
+        new_rows = self._rows_from_tree_order()
+        if len(new_rows) != len(self._rows):
+            self._load_productos()
+            return
+        prev_ids = [int(row.get("id")) for row in self._rows]
+        new_ids = [int(row.get("id")) for row in new_rows]
+        if new_ids == prev_ids:
+            self.status_var.set("Sin cambios en el orden.")
+            return
+
+        self._persist_order(new_rows, int(source))
 
 
 if __name__ == "__main__":
