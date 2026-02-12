@@ -10,7 +10,7 @@ class POSApp(tk.Tk):
     def __init__(self):
         super().__init__()
         install_messagebox_parenting(self)
-        self.title("Barbacoa POS - Demo Profesional (Tk)")
+        self.title("AutoNoma POS - Demo Profesional (Tk)")
         self.geometry("1100x700")
 
         # Estilo ttk (se ve pro)
@@ -37,7 +37,7 @@ class POSApp(tk.Tk):
         top = ttk.Frame(self, padding=10)
         top.pack(fill="x")
 
-        ttk.Label(top, text="BARBACOA POS", font=("Arial", 18, "bold")).pack(side="left")
+        ttk.Label(top, text="AUTONOMA POS", font=("Arial", 18, "bold")).pack(side="left")
 
         ttk.Label(top, text="Mesero:").pack(side="right")
         self.mesero_var = tk.StringVar()

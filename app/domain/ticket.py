@@ -20,7 +20,7 @@ def _extend_wrapped(lines: list[str], text: str, width: int = TICKET_WIDTH) -> N
 
 
 def build_ticket_text(payload: dict) -> str:
-    negocio = payload.get("negocio", "BARBACOA DE MIRAND")
+    negocio = payload.get("negocio", "Barbacoa de Miranda")
     folio = payload.get("folio", "N/A")
     fecha_hora = payload.get("fecha_hora", datetime.now())
     mesa = payload.get("mesa", "") or "-"
