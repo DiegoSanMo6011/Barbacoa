@@ -12,8 +12,9 @@ class GastosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService):
         super().__init__(master)
         self.title("Gastos - Control de Suministros")
-        self.geometry("850x650")
-        self.resizable(False, False)
+        self.geometry("1020x720")
+        self.minsize(940, 640)
+        self.resizable(True, True)
         self.grab_set()  # solo se puede interactuar con la ventana de adelante
 
         self.db = supabase
@@ -45,6 +46,9 @@ class GastosDialog(ctk.CTkToplevel):
         # 2. FRAME DEL FORMULARIO
         form_frame = ctk.CTkFrame(self)
         form_frame.pack(fill="x", padx=20, pady=15)
+        form_frame.grid_columnconfigure(0, weight=1)
+        form_frame.grid_columnconfigure(1, weight=1)
+        form_frame.grid_columnconfigure(2, weight=1)
 
         # --- FILA 1: Labels de guía ---
         ctk.CTkLabel(form_frame, text="Monto ($)", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, sticky="w")
@@ -53,19 +57,24 @@ class GastosDialog(ctk.CTkToplevel):
 
         # --- FILA 2: Inputs principales ---
         self.entry_monto = ctk.CTkEntry(form_frame, textvariable=self.monto_var, placeholder_text="Ej: 450.00", width=140)
-        self.entry_monto.grid(row=1, column=0, padx=10, pady=(0, 15))
+        self.entry_monto.grid(row=1, column=0, padx=10, pady=(0, 15), sticky="ew")
 
         self.menu_cat = ctk.CTkOptionMenu(form_frame, values=self.lista_categorias, variable=self.categoria_var, width=160)
-        self.menu_cat.grid(row=1, column=1, padx=10, pady=(0, 15))
+        self.menu_cat.grid(row=1, column=1, padx=10, pady=(0, 15), sticky="ew")
 
         self.menu_pago = ctk.CTkOptionMenu(form_frame, values=self.metodos_pago, variable=self.metodo_pago_var, width=160, fg_color="#34495e")
-        self.menu_pago.grid(row=1, column=2, padx=10, pady=(0, 15))
+        self.menu_pago.grid(row=1, column=2, padx=10, pady=(0, 15), sticky="ew")
 
         # --- FILA 3: Descripción y Botón ---
-        ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=("Arial", 12, "bold")).grid(row=2, column=0, columnspan=2, padx=10, sticky="w")
+        ctk.CTkLabel(form_frame, text="Concepto / Descripción del Gasto", font=("Arial", 12, "bold")).grid(row=2, column=0, columnspan=3, padx=10, sticky="w")
         
-        self.entry_desc = ctk.CTkEntry(form_frame, textvariable=self.concepto_var, placeholder_text="¿En qué se gastó el crédito? (Ej: Compra de Cilantro)", width=480)
-        self.entry_desc.grid(row=3, column=0, columnspan=3, padx=10, pady=(0, 15), sticky="w")
+        self.entry_desc = ctk.CTkEntry(
+            form_frame,
+            textvariable=self.concepto_var,
+            placeholder_text="¿En qué se gastó el crédito? (Ej: Compra de Cilantro)",
+            width=480,
+        )
+        self.entry_desc.grid(row=3, column=0, columnspan=2, padx=10, pady=(0, 15), sticky="ew")
 
         # Botón de Guardar 
         self.btn_save = ttk.Button(
@@ -74,7 +83,7 @@ class GastosDialog(ctk.CTkToplevel):
             style="Accent.TButton",
             command=self._guardar,
         )
-        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="e")
+        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="ew")
 
         # 3. SECCIÓN DE HISTORIAL
         list_frame = ctk.CTkFrame(self)
@@ -107,7 +116,7 @@ class GastosDialog(ctk.CTkToplevel):
 
         # Scrollbar para la tabla
         scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=scroller.set)
+        self.tree.configure(yscrollcommand=scroller.set)
         
         self.tree.pack(side="left", fill="both", expand=True, padx=(10,0), pady=10)
         scroller.pack(side="right", fill="y", padx=(0,10), pady=10)

@@ -28,8 +28,9 @@ class CorteView(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService, auth: AuthService | None = None):
         super().__init__(master)
         self.title("Corte de caja")
-        self.geometry("980x620")
-        self.resizable(False, False)
+        self.geometry("1120x760")
+        self.minsize(980, 660)
+        self.resizable(True, True)
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
 

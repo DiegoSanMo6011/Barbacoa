@@ -16,8 +16,9 @@ class UsuariosDialog(ctk.CTkToplevel):
     def __init__(self, master, supabase: SupabaseService, auth: AuthService):
         super().__init__(master)
         self.title("Usuarios y seguridad")
-        self.geometry("860x560")
-        self.resizable(False, False)
+        self.geometry("980x660")
+        self.minsize(860, 560)
+        self.resizable(True, True)
         self.grab_set()
 
         self.db = supabase

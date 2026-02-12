@@ -5,6 +5,7 @@ import logging
 import threading
 import time as pytime
 from datetime import datetime
+from typing import Callable
 import tkinter as tk
 from tkinter import ttk, messagebox
 import customtkinter as ctk
@@ -121,6 +122,7 @@ class POSApp(tk.Tk):
         self._meseros_last_refresh_at = 0.0
         self._meseros_refresh_ttl_s = self._load_meseros_refresh_ttl()
         self._sync_in_progress = False
+        self._admin_dialogs: dict[str, tk.Toplevel] = {}
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.filtered = []
@@ -1267,42 +1269,85 @@ class POSApp(tk.Tk):
             messagebox.showerror("Error", f"No se pudo guardar en Supabase:\n{e}")
 
     # ---------------- Dialogs ----------------
+    def _focus_existing_admin_dialog(self, key: str) -> bool:
+        dlg = self._admin_dialogs.get(key)
+        if dlg is None:
+            return False
+        try:
+            if int(dlg.winfo_exists()):
+                dlg.deiconify()
+                dlg.lift()
+                dlg.focus_force()
+                try:
+                    dlg.grab_set()
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        self._admin_dialogs.pop(key, None)
+        return False
+
+    def _open_admin_dialog(
+        self,
+        key: str,
+        factory: Callable[[], tk.Toplevel],
+        *,
+        on_close: Callable[[], None] | None = None,
+    ) -> None:
+        if self._focus_existing_admin_dialog(key):
+            return
+        dlg = factory()
+        self._admin_dialogs[key] = dlg
+        try:
+            self.wait_window(dlg)
+        finally:
+            if self._admin_dialogs.get(key) is dlg:
+                self._admin_dialogs.pop(key, None)
+            if on_close is not None:
+                on_close()
+
     def _open_gastos(self):
         if not self._ensure_permission(Permission.GASTOS, "abrir Gastos"):
             return
-        GastosDialog(self, self.db)
+        self._open_admin_dialog("gastos", lambda: GastosDialog(self, self.db))
 
     def _open_propinas(self):
         if not self._ensure_permission(Permission.PROPINAS, "abrir Propinas"):
             return
-        PropinasDialog(self, self.db)
+        self._open_admin_dialog("propinas", lambda: PropinasDialog(self, self.db))
 
     def _open_corte(self):
         if not self._ensure_permission(Permission.CORTE, "abrir Corte"):
             return
-        dlg = CorteView(self, self.db, self.auth)
-        self.wait_window(dlg)
-        self._apply_role_to_ui()
+        self._open_admin_dialog(
+            "corte",
+            lambda: CorteView(self, self.db, self.auth),
+            on_close=self._apply_role_to_ui,
+        )
 
     def _open_reportes(self):
         if not self._ensure_permission(Permission.REPORTES, "abrir Reportes"):
             return
-        ReportesView(self, self.db)
+        self._open_admin_dialog("reportes", lambda: ReportesView(self, self.db))
 
     def _open_personal(self):
         if not self._ensure_permission(Permission.PERSONAL, "abrir Personal"):
             return
-        dlg = PersonalDialog(self, self.db)
-        self.wait_window(dlg)
-        self._refresh_meseros_dropdown(force=True)
+        self._open_admin_dialog(
+            "personal",
+            lambda: PersonalDialog(self, self.db),
+            on_close=lambda: self._refresh_meseros_dropdown(force=True),
+        )
 
     def _open_productos(self):
         if not self._ensure_permission(Permission.PRODUCTOS, "abrir Productos"):
             return
-        dlg = ProductosDialog(self, self.db)
-        self.wait_window(dlg)
-        self.productos = self.db.get_productos()
-        self._refresh_catalog()
+        self._open_admin_dialog(
+            "productos",
+            lambda: ProductosDialog(self, self.db),
+            on_close=self._reload_productos_catalogo,
+        )
 
     def _open_change_pin(self):
         role = self.auth.current_role()
@@ -1312,8 +1357,15 @@ class POSApp(tk.Tk):
                 "Desbloquea GERENTE o DUEÑO para cambiar PIN.",
             )
             return
-        dlg = ChangePinDialog(self, self.db, self.auth, role)
-        self.wait_window(dlg)
+        self._open_admin_dialog(
+            "change_pin",
+            lambda: ChangePinDialog(self, self.db, self.auth, role),
+            on_close=self._apply_role_to_ui,
+        )
+
+    def _reload_productos_catalogo(self):
+        self.productos = self.db.get_productos()
+        self._refresh_catalog()
         self._apply_role_to_ui()
 
     def _refresh_meseros_dropdown(self, *, force: bool = False):
