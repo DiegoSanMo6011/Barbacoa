@@ -349,9 +349,15 @@ class SupabaseService(OfflineSync):
         agg: dict[str, dict] = {}
         for r in rows:
             mesero_id = r.get("mesero_id")
-            mesero_name = r.get("mesero_nombre_snapshot") or None
-            key = mesero_id or mesero_name or "SIN_NOMBRE"
-            label = mesero_name or mesero_id or "Sin nombre"
+            mesero_name = (r.get("mesero_nombre_snapshot") or "").strip() or None
+            # Agrupar por nombre cuando existe para evitar duplicados entre
+            # registros de comanda (con id) y registros manuales (sin id).
+            if mesero_name:
+                key = f"NAME::{mesero_name.lower()}"
+                label = mesero_name
+            else:
+                key = f"ID::{mesero_id}" if mesero_id else "SIN_NOMBRE"
+                label = mesero_id or "Sin nombre"
             fuente = str(r.get("fuente") or "").strip().upper()
             if fuente in {"MANUAL", "COMANDA", ""}:
                 fuente = "NO_ESPECIFICADO"
@@ -367,6 +373,7 @@ class SupabaseService(OfflineSync):
                     "num_tarjeta": 0,
                     "total_tarjeta": 0.0,
                     "num_efectivo": 0,
+                    "total_efectivo": 0.0,
                     "num_transfer": 0,
                     "num_no_especificado": 0,
                 }
@@ -378,6 +385,7 @@ class SupabaseService(OfflineSync):
                 agg[key]["total_tarjeta"] += monto
             elif fuente == "EFECTIVO":
                 agg[key]["num_efectivo"] += 1
+                agg[key]["total_efectivo"] += monto
             elif fuente == "TRANSFER":
                 agg[key]["num_transfer"] += 1
             else:

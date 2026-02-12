@@ -67,24 +67,49 @@ def get_propinas_total(fecha: date, db: SupabaseService | None = None) -> float:
 def get_propinas_tarjeta_resumen(fecha: date, db: SupabaseService | None = None) -> dict:
     db = _get_db(db)
     rows = db.reporte_propinas_dia(fecha)
-    detalle: list[dict] = []
+    by_mesero: dict[str, dict] = {}
 
     for r in rows:
         num_tarjeta = int(r.get("num_tarjeta") or 0)
         total_tarjeta = round(float(r.get("total_tarjeta") or 0), 2)
-        if num_tarjeta <= 0 and total_tarjeta <= 0:
+        num_efectivo = int(r.get("num_efectivo") or 0)
+        total_efectivo = round(float(r.get("total_efectivo") or 0), 2)
+        if num_tarjeta <= 0 and total_tarjeta <= 0 and num_efectivo <= 0 and total_efectivo <= 0:
             continue
         mesero = (r.get("mesero") or "Sin nombre").strip() or "Sin nombre"
-        detalle.append(
+        key = mesero.lower()
+        item = by_mesero.get(
+            key,
             {
                 "mesero": mesero,
-                "num_tarjeta": num_tarjeta,
-                "total_tarjeta": total_tarjeta,
-            }
+                "num_tarjeta": 0,
+                "total_tarjeta": 0.0,
+                "num_efectivo": 0,
+                "total_efectivo": 0.0,
+            },
         )
+        item["num_tarjeta"] += num_tarjeta
+        item["total_tarjeta"] += total_tarjeta
+        item["num_efectivo"] += num_efectivo
+        item["total_efectivo"] += total_efectivo
+        by_mesero[key] = item
 
-    total = round(sum(float(item.get("total_tarjeta") or 0) for item in detalle), 2)
-    return {"total_propinas_tarjeta": total, "detalle": detalle}
+    detalle = list(by_mesero.values())
+    for item in detalle:
+        item["total_tarjeta"] = round(float(item.get("total_tarjeta") or 0), 2)
+        item["total_efectivo"] = round(float(item.get("total_efectivo") or 0), 2)
+        item["total_pagar"] = round(item["total_tarjeta"] + item["total_efectivo"], 2)
+
+    detalle.sort(key=lambda x: (-float(x.get("total_pagar") or 0), x.get("mesero") or ""))
+
+    total_tarjeta = round(sum(float(item.get("total_tarjeta") or 0) for item in detalle), 2)
+    total_efectivo = round(sum(float(item.get("total_efectivo") or 0) for item in detalle), 2)
+    return {
+        "total_propinas_tarjeta": total_tarjeta,
+        "total_propinas_efectivo": total_efectivo,
+        "total_propinas_reparto": round(total_tarjeta + total_efectivo, 2),
+        "detalle": detalle,
+    }
 
 
 def _normalize_propinas_detalle(raw: object) -> list[dict]:
@@ -109,11 +134,23 @@ def _normalize_propinas_detalle(raw: object) -> list[dict]:
             total_tarjeta = round(float(item.get("total_tarjeta") or 0), 2)
         except Exception:
             total_tarjeta = 0.0
+        try:
+            num_efectivo = int(item.get("num_efectivo") or 0)
+        except Exception:
+            num_efectivo = 0
+        try:
+            total_efectivo = round(float(item.get("total_efectivo") or 0), 2)
+        except Exception:
+            total_efectivo = 0.0
+        total_pagar = round(max(0.0, total_tarjeta) + max(0.0, total_efectivo), 2)
         rows.append(
             {
                 "mesero": mesero,
                 "num_tarjeta": max(0, num_tarjeta),
                 "total_tarjeta": max(0.0, total_tarjeta),
+                "num_efectivo": max(0, num_efectivo),
+                "total_efectivo": max(0.0, total_efectivo),
+                "total_pagar": max(0.0, total_pagar),
             }
         )
     return rows
