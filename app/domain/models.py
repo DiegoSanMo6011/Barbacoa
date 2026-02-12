@@ -75,6 +75,8 @@ class Producto(RecordSerializable):
     categoria: str
     precio: float
     activo: bool = True
+    venta_por_gramo: bool = False
+    orden_catalogo: int = 1000
 
     @classmethod
     def from_inputs(
@@ -83,6 +85,8 @@ class Producto(RecordSerializable):
         categoria: str,
         precio: float,
         activo: bool = True,
+        venta_por_gramo: bool = False,
+        orden_catalogo: int = 1000,
     ) -> "Producto":
         nombre_limpio = _clean_text(nombre)
         if not nombre_limpio:
@@ -92,12 +96,20 @@ class Producto(RecordSerializable):
             raise ValueError("categoria es obligatoria")
         if precio is None or float(precio) < 0:
             raise ValueError("precio debe ser >= 0")
+        try:
+            orden = int(orden_catalogo)
+        except Exception:
+            orden = 1000
+        if orden < 0:
+            raise ValueError("orden_catalogo debe ser >= 0")
         return cls(
             id=None,
             nombre=nombre_limpio,
             categoria=categoria_limpia,
             precio=_round2(float(precio)),
             activo=bool(activo),
+            venta_por_gramo=bool(venta_por_gramo),
+            orden_catalogo=orden,
         )
 
     @classmethod
@@ -108,6 +120,8 @@ class Producto(RecordSerializable):
             categoria=data.get("categoria") or "GENERAL",
             precio=_round2(float(data.get("precio") or 0)),
             activo=bool(data.get("activo", True)),
+            venta_por_gramo=bool(data.get("venta_por_gramo", False)),
+            orden_catalogo=int(data.get("orden_catalogo") or 1000),
         )
 
     def to_record(self) -> dict:
@@ -116,7 +130,10 @@ class Producto(RecordSerializable):
             "categoria": _clean_text(self.categoria) or "GENERAL",
             "precio": _round2(self.precio),
             "activo": bool(self.activo),
+            "orden_catalogo": int(self.orden_catalogo),
         }
+        if self.venta_por_gramo:
+            record["venta_por_gramo"] = True
         if self.id is not None:
             record["id"] = int(self.id)
         return record

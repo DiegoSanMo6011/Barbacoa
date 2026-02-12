@@ -87,6 +87,8 @@ CREATE TABLE public.productos (
   precio numeric NOT NULL CHECK (precio >= 0::numeric),
   categoria text NOT NULL DEFAULT 'GENERAL'::text,
   activo boolean NOT NULL DEFAULT true,
+  venta_por_gramo boolean NOT NULL DEFAULT false,
+  orden_catalogo integer NOT NULL DEFAULT 1000,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT productos_pkey PRIMARY KEY (id)
 );

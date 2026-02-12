@@ -122,6 +122,7 @@ class POSApp(tk.Tk):
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.filtered = []
+        self._gramaje_vars: dict[int, tk.StringVar] = {}
         self.comandas = []
         self.active_comanda = None
         self._comandas_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "comandas_abiertas.json"))
@@ -661,6 +662,29 @@ class POSApp(tk.Tk):
             return nombre[:2].upper()
         return nombre[0].upper()
 
+    def _format_weight_label(self, grams: int) -> str:
+        if grams == 500:
+            return "1/2 kg"
+        if grams >= 1000:
+            kilos = grams / 1000.0
+            kilos_txt = f"{kilos:.2f}".rstrip("0").rstrip(".")
+            return f"{kilos_txt} kg"
+        return f"{grams} g"
+
+    def _gramaje_var_for_producto(self, producto_id: int) -> tk.StringVar:
+        if producto_id not in self._gramaje_vars:
+            self._gramaje_vars[producto_id] = tk.StringVar(value="500")
+        return self._gramaje_vars[producto_id]
+
+    def _parse_weight_grams(self, raw: str) -> int | None:
+        try:
+            grams = int((raw or "").strip())
+        except Exception:
+            return None
+        if grams <= 0:
+            return None
+        return grams
+
     def _render_catalog_cards(self):
         if not hasattr(self, "catalog_inner"):
             return
@@ -694,6 +718,7 @@ class POSApp(tk.Tk):
             col = idx % cols
             categoria = str(p.get("categoria", "GENERAL"))
             accent = self._category_color(categoria)
+            is_by_weight = bool(p.get("venta_por_gramo"))
 
             card = tk.Frame(
                 self.catalog_inner,
@@ -704,7 +729,7 @@ class POSApp(tk.Tk):
                 highlightbackground=accent,
             )
             card.grid(row=row, column=col, padx=gap // 2, pady=gap // 2, sticky="nsew")
-            card.configure(width=card_w, height=card_h)
+            card.configure(width=card_w, height=(self._ui_px(190) if is_by_weight else card_h))
             card.grid_propagate(False)
 
             cat_chip = tk.Label(
@@ -754,6 +779,54 @@ class POSApp(tk.Tk):
                 anchor="w",
             )
             price_lbl.pack(fill="x")
+            if is_by_weight:
+                tk.Label(
+                    top,
+                    text="Precio por kg",
+                    bg="#ffffff",
+                    fg="#475569",
+                    font=("Arial", self._ui_px(10), "bold"),
+                    anchor="w",
+                ).pack(fill="x")
+                grams_row = tk.Frame(card, bg="#ffffff")
+                grams_row.pack(fill="x", padx=self._ui_px(6), pady=(0, self._ui_px(4)))
+                tk.Label(
+                    grams_row,
+                    text="Gramaje:",
+                    bg="#ffffff",
+                    fg="#334155",
+                    font=("Arial", self._ui_px(10), "bold"),
+                ).pack(side="left")
+                product_id = int(p.get("id") or 0)
+                grams_var = self._gramaje_var_for_producto(product_id)
+                grams_entry = ttk.Entry(grams_row, textvariable=grams_var, width=5, justify="center")
+                grams_entry.pack(side="left", padx=(self._ui_px(4), self._ui_px(4)))
+                grams_entry.bind("<Return>", lambda _e, prod=p, i=idx: self._add_product_from_catalog(prod, i))
+                tk.Label(
+                    grams_row,
+                    text="g",
+                    bg="#ffffff",
+                    fg="#334155",
+                    font=("Arial", self._ui_px(10), "bold"),
+                ).pack(side="left")
+
+                preset_var = tk.StringVar(value="1/2 kg")
+                preset_menu = ttk.Combobox(
+                    grams_row,
+                    textvariable=preset_var,
+                    values=["100 g", "250 g", "1/2 kg", "1 kg"],
+                    state="readonly",
+                    width=6,
+                )
+                preset_menu.pack(side="left", padx=(self._ui_px(4), 0))
+
+                def _on_preset(_event=None, *, grams_text_var=grams_var, choice_var=preset_var):
+                    preset_map = {"100 g": 100, "250 g": 250, "1/2 kg": 500, "1 kg": 1000}
+                    grams_value = preset_map.get((choice_var.get() or "").strip())
+                    if grams_value:
+                        grams_text_var.set(str(grams_value))
+
+                preset_menu.bind("<<ComboboxSelected>>", _on_preset)
 
             add_btn = ttk.Button(
                 card,
@@ -918,6 +991,13 @@ class POSApp(tk.Tk):
             if q and (q not in p["nombre"].lower()) and (q not in pcat.lower()):
                 continue
             self.filtered.append(p)
+        self.filtered.sort(
+            key=lambda p: (
+                int(p.get("orden_catalogo") or 1000),
+                str(p.get("categoria") or "GENERAL"),
+                str(p.get("nombre") or ""),
+            )
+        )
         self._render_catalog_cards()
 
     def _add_selected_product(self):
@@ -938,10 +1018,24 @@ class POSApp(tk.Tk):
             return
 
         unit = float(product["precio"])
+        nombre_snapshot = str(product.get("nombre") or "Producto")
+        if bool(product.get("venta_por_gramo")):
+            product_id = int(product.get("id") or 0)
+            grams_var = self._gramaje_var_for_producto(product_id)
+            gramos = self._parse_weight_grams(grams_var.get())
+            if gramos is None:
+                messagebox.showwarning(
+                    "Peso inválido",
+                    "Para este producto escribe un gramaje válido en su tarjeta (ej. 100, 250, 500, 1000).",
+                )
+                return
+            unit = round((unit * gramos) / 1000.0, 2)
+            nombre_snapshot = f"{nombre_snapshot} ({self._format_weight_label(gramos)})"
+
         sub = calcular_subtotal(unit, qty)
         self.items.append({
             "producto_id": product["id"],
-            "nombre_snapshot": product["nombre"],
+            "nombre_snapshot": nombre_snapshot,
             "precio_unitario": unit,
             "cantidad": qty,
             "subtotal": sub,

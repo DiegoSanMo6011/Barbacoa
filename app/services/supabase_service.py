@@ -79,8 +79,23 @@ class SupabaseService(OfflineSync):
         productos = self.productos_repo.list_all()
         return [p.to_record() for p in productos]
 
-    def crear_producto(self, nombre: str, categoria: str, precio: float, activo: bool = True) -> dict:
-        producto = Producto.from_inputs(nombre=nombre, categoria=categoria, precio=precio, activo=activo)
+    def crear_producto(
+        self,
+        nombre: str,
+        categoria: str,
+        precio: float,
+        activo: bool = True,
+        venta_por_gramo: bool = False,
+        orden_catalogo: int = 1000,
+    ) -> dict:
+        producto = Producto.from_inputs(
+            nombre=nombre,
+            categoria=categoria,
+            precio=precio,
+            activo=activo,
+            venta_por_gramo=venta_por_gramo,
+            orden_catalogo=orden_catalogo,
+        )
         creado = self.productos_repo.create(producto)
         return creado.to_record()
 
@@ -91,6 +106,8 @@ class SupabaseService(OfflineSync):
         categoria: str | None = None,
         precio: float | None = None,
         activo: bool | None = None,
+        venta_por_gramo: bool | None = None,
+        orden_catalogo: int | None = None,
     ) -> dict:
         if producto_id is None:
             raise ValueError("producto_id es obligatorio")
@@ -110,6 +127,16 @@ class SupabaseService(OfflineSync):
             changes["precio"] = round(float(precio), 2)
         if activo is not None:
             changes["activo"] = bool(activo)
+        if venta_por_gramo is not None:
+            changes["venta_por_gramo"] = bool(venta_por_gramo)
+        if orden_catalogo is not None:
+            try:
+                orden = int(orden_catalogo)
+            except Exception as exc:
+                raise ValueError("orden_catalogo debe ser un entero >= 0") from exc
+            if orden < 0:
+                raise ValueError("orden_catalogo debe ser >= 0")
+            changes["orden_catalogo"] = orden
         if not changes:
             raise ValueError("no hay cambios para actualizar")
 

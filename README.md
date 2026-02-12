@@ -124,6 +124,9 @@ Migración requerida en Supabase para jornada:
 Migración recomendada para origen de propinas por método:
 - `sql/propinas_origen_metodo.sql`
 
+Migración recomendada para venta por gramos y orden del catálogo en productos:
+- `sql/productos_venta_por_gramo.sql`
+
 ## Seed inicial de roles
 
 Configura en `.env`:

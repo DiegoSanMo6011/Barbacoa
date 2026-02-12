@@ -52,11 +52,53 @@ class ProductosRepository(SupabaseTable):
     table_name = "productos"
 
     def list_activos(self) -> list[Producto]:
-        rows = self._table().select("*").eq("activo", True).order("categoria").execute().data or []
+        try:
+            rows = (
+                self._table()
+                .select("*")
+                .eq("activo", True)
+                .order("orden_catalogo")
+                .order("categoria")
+                .order("nombre")
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            rows = (
+                self._table()
+                .select("*")
+                .eq("activo", True)
+                .order("categoria")
+                .order("nombre")
+                .execute()
+                .data
+                or []
+            )
         return [Producto.from_record(r) for r in rows]
 
     def list_all(self) -> list[Producto]:
-        rows = self._table().select("*").order("categoria").execute().data or []
+        try:
+            rows = (
+                self._table()
+                .select("*")
+                .order("orden_catalogo")
+                .order("categoria")
+                .order("nombre")
+                .execute()
+                .data
+                or []
+            )
+        except Exception:
+            rows = (
+                self._table()
+                .select("*")
+                .order("categoria")
+                .order("nombre")
+                .execute()
+                .data
+                or []
+            )
         return [Producto.from_record(r) for r in rows]
 
     def create(self, producto: Producto) -> Producto:
