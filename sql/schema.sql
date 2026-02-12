@@ -10,6 +10,8 @@ CREATE TABLE public.cierres_caja (
   neto numeric NOT NULL,
   caja_chica_inicial numeric NOT NULL DEFAULT 0::numeric,
   efectivo_reportado numeric NOT NULL,
+  total_propinas_tarjeta numeric NOT NULL DEFAULT 0::numeric,
+  propinas_tarjeta_detalle jsonb NOT NULL DEFAULT '[]'::jsonb,
   diferencia_efectivo numeric NOT NULL,
   estado text NOT NULL DEFAULT 'CERRADO'::text CHECK (estado = ANY (ARRAY['ABIERTO'::text, 'CERRADO'::text])),
   abierto_at timestamp with time zone NOT NULL DEFAULT now(),
