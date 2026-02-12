@@ -22,6 +22,7 @@ from services.corte_service import (
 )
 from services.auth_service import AuthService
 from services.supabase_service import SupabaseService
+from ui.mousewheel import bind_mousewheel
 
 
 class CorteView(ctk.CTkToplevel):
@@ -170,6 +171,7 @@ class CorteView(ctk.CTkToplevel):
         propinas_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.propinas_tree.yview)
         propinas_scroll.grid(row=0, column=1, sticky="ns")
         self.propinas_tree.configure(yscrollcommand=propinas_scroll.set)
+        bind_mousewheel(self.propinas_tree, self.propinas_tree.yview)
 
         status_frame = ctk.CTkFrame(self, fg_color="transparent")
         status_frame.pack(fill="x", padx=12, pady=(0, 6))
