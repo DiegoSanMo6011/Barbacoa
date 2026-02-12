@@ -6,6 +6,7 @@ import os
 import threading
 from zoneinfo import ZoneInfo
 
+import httpx
 from supabase import create_client
 from supabase.lib.client_options import ClientOptions
 
@@ -69,6 +70,49 @@ class SupabaseService(OfflineSync):
         self.usuarios_repo = UsuariosRepository(self.client)
 
         self._start_legacy_role_migration_async()
+
+    @staticmethod
+    def _should_enqueue_offline(exc: Exception) -> bool:
+        if isinstance(exc, ValueError):
+            return False
+        if isinstance(exc, (httpx.RequestError, TimeoutError)):
+            return True
+
+        msg = str(exc).lower()
+        err_type = exc.__class__.__name__.lower()
+
+        non_transient_tokens = (
+            "bad request",
+            "violates",
+            "constraint",
+            "invalid input",
+            "permission denied",
+            "not null",
+            "foreign key",
+            "unique",
+            "schema cache",
+            "column",
+            "check constraint",
+            "http/2 400",
+        )
+        if any(token in msg for token in non_transient_tokens):
+            return False
+
+        transient_tokens = (
+            "timeout",
+            "timed out",
+            "connection",
+            "network",
+            "name resolution",
+            "temporary failure",
+            "dns",
+            "unreachable",
+            "service unavailable",
+            "gateway timeout",
+            "connection refused",
+            "connection reset",
+        )
+        return any(token in msg for token in transient_tokens) or "connecterror" in err_type
 
     # ---------------- Productos ----------------
     def get_productos(self) -> list[dict]:
@@ -227,7 +271,9 @@ class SupabaseService(OfflineSync):
         )
         try:
             return self.gastos_repo.create(gasto)
-        except Exception:
+        except Exception as exc:
+            if not self._should_enqueue_offline(exc):
+                raise
             self.offline.enqueue(GastoOperation(gasto.to_record()))
             return {"offline": True}
 

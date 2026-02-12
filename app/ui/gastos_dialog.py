@@ -21,7 +21,7 @@ class GastosDialog(ctk.CTkToplevel):
 
         # --- CONFIGURACIÓN DE CATEGORÍAS ---
         self.lista_categorias = ["INSUMOS", "GAS", "NOMINA", "MANTENIMIENTO", "GENERAL", "OTRO"]
-        self.metodos_pago = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"]
+        self.metodos_pago = ["EFECTIVO", "TARJETA", "TRANSFER"]
 
         # Variables de Control (Variables de Estado)
         self.monto_var = tk.StringVar()
@@ -143,21 +143,28 @@ class GastosDialog(ctk.CTkToplevel):
         # 3. Guardado en Supabase 
         try:
             #supabase_service ahora recibe metodo_pago
-            self.db.crear_gasto(
+            result = self.db.crear_gasto(
                 concepto=concepto,
                 categoria=categoria,
                 monto=monto,
                 metodo_pago=metodo
             )
-            
+
             # 4. Feedback y Limpieza
-            messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
+            if isinstance(result, dict) and result.get("offline"):
+                messagebox.showwarning(
+                    "Sin conexión",
+                    "No se pudo sincronizar con la base de datos.\n"
+                    "El gasto se guardó en cola offline para sincronizarse después."
+                )
+            else:
+                messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
             self.concepto_var.set("")
             self.monto_var.set("")
             self._load_gastos() # Refrescar la tabla
             
         except Exception as e:
-            messagebox.showerror("Error de Conexión", f"No se pudo sincronizar con la base de datos:\n{e}")
+            messagebox.showerror("Error al registrar gasto", f"No se pudo registrar el gasto:\n{e}")
 
     def _load_gastos(self):
         """Carga los gastos del día actual desde la base de datos."""
