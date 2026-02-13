@@ -7,6 +7,7 @@ import customtkinter as ctk
 
 from domain.auth import Role
 from domain.corte import calc_diferencia, calc_efectivo_teorico
+from domain.ticket import build_corte_ticket_text
 from ui.assets import load_logo
 from ui.auth_unlock_dialog import ask_unlock_for_role
 from services.corte_service import (
@@ -23,6 +24,7 @@ from services.corte_service import (
 from services.auth_service import AuthService
 from services.supabase_service import SupabaseService
 from ui.mousewheel import bind_mousewheel
+from ui.ticket_preview import TicketPreview
 
 
 class CorteView(ctk.CTkToplevel):
@@ -46,6 +48,7 @@ class CorteView(ctk.CTkToplevel):
         self.diferencia_var = tk.StringVar(value="$0.00")
         self.estado_jornada_var = tk.StringVar(value="NO INICIADO")
         self.status_var = tk.StringVar(value="")
+        self.flujo_var = tk.StringVar(value="Paso 1: Inicia la jornada con caja chica.")
 
         self.total_ventas_var = tk.StringVar(value="0.00")
         self.ventas_efectivo_var = tk.StringVar(value="0.00")
@@ -100,6 +103,15 @@ class CorteView(ctk.CTkToplevel):
         self.btn_reabrir = ttk.Button(jornada, text="Reabrir / Editar (Dueño)", command=self._reabrir_jornada)
         self.btn_reabrir.grid(row=0, column=4, padx=8, pady=8, sticky="e")
         jornada.grid_columnconfigure(5, weight=1)
+
+        flujo = ctk.CTkFrame(self, fg_color="#eef2ff")
+        flujo.pack(fill="x", padx=12, pady=(0, 10))
+        ctk.CTkLabel(flujo, text="Flujo sugerido:", font=("Arial", 12, "bold")).pack(side="left", padx=(10, 6), pady=8)
+        ctk.CTkLabel(flujo, textvariable=self.flujo_var, text_color="#1f2937").pack(side="left", padx=6, pady=8)
+        self.btn_empezar_cierre = ttk.Button(flujo, text="Empezar cierre del día", style="Accent.TButton", command=self._empezar_cierre)
+        self.btn_empezar_cierre.pack(side="right", padx=(6, 10), pady=6)
+        self.btn_imprimir = ttk.Button(flujo, text="Imprimir corte", command=self._imprimir_corte)
+        self.btn_imprimir.pack(side="right", padx=6, pady=6)
 
         resumen = ctk.CTkFrame(self)
         resumen.pack(fill="x", padx=12, pady=(0, 10))
@@ -303,6 +315,7 @@ class CorteView(ctk.CTkToplevel):
         self._load_corte_existente(fecha)
         self._recalculate_totals()
         self._apply_state_ui()
+        self._update_flujo()
         self._focus_primary()
 
     def _load_corte_existente(self, fecha: date):
@@ -490,6 +503,7 @@ class CorteView(ctk.CTkToplevel):
         self.neto_var.set(f"${neto:.2f}")
         self._render_propinas_detalle()
         self._update_diferencia()
+        self._update_flujo()
 
     def _update_diferencia(self):
         try:
@@ -552,6 +566,8 @@ class CorteView(ctk.CTkToplevel):
         self.btn_iniciar.configure(state=("normal" if duenio and estado == "NO INICIADO" else "disabled"))
         self.btn_cerrar.configure(state=("normal" if duenio and estado == "ABIERTO" else "disabled"))
         self.btn_reabrir.configure(state=("normal" if estado == "CERRADO" else "disabled"))
+        self.btn_empezar_cierre.configure(state=("normal" if duenio and estado == "ABIERTO" else "disabled"))
+        self.btn_imprimir.configure(state=("normal" if estado in {"ABIERTO", "CERRADO"} else "disabled"))
 
         if estado == "ABIERTO":
             self.estado_label.configure(text_color="#166534")
@@ -559,6 +575,16 @@ class CorteView(ctk.CTkToplevel):
             self.estado_label.configure(text_color="#b91c1c")
         else:
             self.estado_label.configure(text_color="#92400e")
+
+    def _update_flujo(self):
+        estado = self.estado_jornada_var.get().strip().upper()
+        if estado == "NO INICIADO":
+            self.flujo_var.set("Paso 1: Define caja chica y presiona Iniciar día.")
+            return
+        if estado == "ABIERTO":
+            self.flujo_var.set("Paso 2: Captura efectivo contado y presiona Cerrar día.")
+            return
+        self.flujo_var.set("Día cerrado. Puedes imprimir corte o reabrir con PIN de dueño.")
 
     def _focus_primary(self):
         estado = self.estado_jornada_var.get().strip().upper()
@@ -595,6 +621,20 @@ class CorteView(ctk.CTkToplevel):
         estado = self.estado_jornada_var.get().strip().upper()
         if estado == "ABIERTO":
             self._cerrar_jornada()
+
+    def _empezar_cierre(self):
+        estado = self.estado_jornada_var.get().strip().upper()
+        if estado == "NO INICIADO":
+            messagebox.showinfo("Flujo", "Primero inicia la jornada con caja chica inicial.")
+            self.caja_chica_entry.focus_set()
+            self.caja_chica_entry.select_range(0, tk.END)
+            return
+        if estado == "CERRADO":
+            messagebox.showinfo("Flujo", "El día ya está cerrado. Usa Reabrir si necesitas editar.")
+            return
+        self.status_var.set("Captura efectivo contado para iniciar cierre.")
+        self.efectivo_entry.focus_set()
+        self.efectivo_entry.select_range(0, tk.END)
 
     def _iniciar_jornada(self):
         if not self._require_duenio(confirm_pin=False):
@@ -675,3 +715,32 @@ class CorteView(ctk.CTkToplevel):
             self._refresh()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo reabrir jornada:\n{e}")
+
+    def _build_corte_print_payload(self) -> dict:
+        return {
+            "fecha": self._last.get("fecha") or self.fecha_var.get().strip(),
+            "estado": self.estado_jornada_var.get().strip() or "NO INICIADO",
+            "caja_chica_inicial": self._parse_amount(self.caja_chica_var.get(), default=0.0),
+            "efectivo_contado": self._parse_amount(self.efectivo_contado_var.get(), default=0.0),
+            "efectivo_teorico": float(self._last.get("efectivo_teorico") or 0),
+            "diferencia": self._parse_amount(self.diferencia_var.get().replace("$", ""), default=0.0),
+            "total_ventas": float(self._last.get("total_ventas") or 0),
+            "ventas_efectivo": float(self._last.get("ventas_efectivo") or 0),
+            "ventas_tarjeta": float(self._last.get("ventas_tarjeta") or 0),
+            "ventas_transfer": float(self._last.get("ventas_transfer") or 0),
+            "total_gastos": float(self._last.get("total_gastos") or 0),
+            "total_terminal": self._parse_amount(self.total_terminal_var.get().replace("$", ""), default=0.0),
+            "propinas_tarjeta": float(self._last.get("total_propinas_tarjeta") or 0),
+            "propinas_efectivo": float(self._last.get("total_propinas_efectivo") or 0),
+            "propinas_total": float(self._last.get("total_propinas_reparto") or 0),
+            "propinas_detalle": self._normalized_propinas_detalle(self._last.get("propinas_tarjeta_detalle")),
+        }
+
+    def _imprimir_corte(self):
+        if not self._last:
+            self._refresh()
+            if not self._last:
+                return
+
+        ticket_text = build_corte_ticket_text(self._build_corte_print_payload())
+        TicketPreview(self, ticket_text, None)
