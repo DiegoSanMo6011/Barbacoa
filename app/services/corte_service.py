@@ -281,6 +281,31 @@ def reabrir_jornada(fecha: date, db: SupabaseService | None = None) -> dict:
         _ensure_jornada_columns(exc)
 
 
+def actualizar_caja_chica_jornada(
+    fecha: date,
+    caja_chica_inicial: float,
+    db: SupabaseService | None = None,
+) -> dict:
+    db = _get_db(db)
+    caja = round(float(caja_chica_inicial or 0), 2)
+    if caja < 0:
+        raise ValueError("caja_chica_inicial debe ser >= 0")
+
+    existente = get_corte_por_fecha(fecha, db=db)
+    if not existente:
+        raise ValueError("Primero inicia la jornada antes de modificar caja chica.")
+
+    if _normalize_estado(existente.get("estado")) != ESTADO_ABIERTO:
+        raise ValueError("La jornada está cerrada. Reabre para poder modificar caja chica.")
+
+    data = {"caja_chica_inicial": caja}
+    try:
+        res = db.client.table("cierres_caja").update(data).eq("id", existente["id"]).execute()
+        return res.data[0]
+    except Exception as exc:
+        _ensure_jornada_columns(exc)
+
+
 def save_corte(payload: dict, db: SupabaseService | None = None) -> dict:
     db = _get_db(db)
     fecha = payload.get("fecha")

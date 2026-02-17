@@ -11,6 +11,7 @@ from domain.ticket import build_corte_ticket_text
 from ui.assets import load_logo
 from ui.auth_unlock_dialog import ask_unlock_for_role
 from services.corte_service import (
+    actualizar_caja_chica_jornada,
     ESTADO_ABIERTO,
     ESTADO_CERRADO,
     cerrar_jornada,
@@ -100,9 +101,15 @@ class CorteView(ctk.CTkToplevel):
         self.btn_iniciar.grid(row=0, column=2, padx=8, pady=8, sticky="e")
         self.btn_cerrar = ttk.Button(jornada, text="Cerrar día", style="Accent.TButton", command=self._cerrar_jornada)
         self.btn_cerrar.grid(row=0, column=3, padx=8, pady=8, sticky="e")
+        self.btn_modificar_caja = ttk.Button(
+            jornada,
+            text="Modificar caja chica (Dueño)",
+            command=self._modificar_caja_chica,
+        )
+        self.btn_modificar_caja.grid(row=0, column=4, padx=8, pady=8, sticky="e")
         self.btn_reabrir = ttk.Button(jornada, text="Reabrir / Editar (Dueño)", command=self._reabrir_jornada)
-        self.btn_reabrir.grid(row=0, column=4, padx=8, pady=8, sticky="e")
-        jornada.grid_columnconfigure(5, weight=1)
+        self.btn_reabrir.grid(row=0, column=5, padx=8, pady=8, sticky="e")
+        jornada.grid_columnconfigure(6, weight=1)
 
         flujo = ctk.CTkFrame(self, fg_color="#eef2ff")
         flujo.pack(fill="x", padx=12, pady=(0, 10))
@@ -259,7 +266,7 @@ class CorteView(ctk.CTkToplevel):
         ctk.CTkLabel(status_frame, textvariable=self.status_var).pack(side="left", padx=6)
         ctk.CTkLabel(
             status_frame,
-            text="Atajos: F5 recargar | Ctrl+I iniciar | Ctrl+Shift+C cerrar | Ctrl+R reabrir",
+            text="Atajos: F5 recargar | Ctrl+I iniciar | Ctrl+Shift+C cerrar | Ctrl+R reabrir | Ctrl+M modificar caja",
             text_color="#6b7280",
         ).pack(side="right", padx=6)
 
@@ -270,6 +277,8 @@ class CorteView(ctk.CTkToplevel):
         self.bind("<Control-Shift-C>", lambda _e: self._cerrar_jornada())
         self.bind("<Control-r>", lambda _e: self._reabrir_jornada())
         self.bind("<Control-R>", lambda _e: self._reabrir_jornada())
+        self.bind("<Control-m>", lambda _e: self._modificar_caja_chica())
+        self.bind("<Control-M>", lambda _e: self._modificar_caja_chica())
 
     def _parse_fecha(self) -> date | None:
         txt = self.fecha_var.get().strip()
@@ -565,6 +574,7 @@ class CorteView(ctk.CTkToplevel):
 
         self.btn_iniciar.configure(state=("normal" if duenio and estado == "NO INICIADO" else "disabled"))
         self.btn_cerrar.configure(state=("normal" if duenio and estado == "ABIERTO" else "disabled"))
+        self.btn_modificar_caja.configure(state=("normal" if duenio and estado == "ABIERTO" else "disabled"))
         self.btn_reabrir.configure(state=("normal" if estado == "CERRADO" else "disabled"))
         self.btn_empezar_cierre.configure(state=("normal" if duenio and estado == "ABIERTO" else "disabled"))
         self.btn_imprimir.configure(state=("normal" if estado in {"ABIERTO", "CERRADO"} else "disabled"))
@@ -702,6 +712,42 @@ class CorteView(ctk.CTkToplevel):
             self._refresh()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo cerrar jornada:\n{e}")
+
+    def _modificar_caja_chica(self):
+        if not self._require_duenio(confirm_pin=False):
+            return
+
+        estado = self.estado_jornada_var.get().strip().upper()
+        if estado != "ABIERTO":
+            messagebox.showwarning(
+                "Jornada no editable",
+                "Solo se puede modificar caja chica cuando la jornada está ABIERTO.",
+            )
+            return
+
+        fecha = self._parse_fecha()
+        if not fecha:
+            return
+
+        caja_chica = self._parse_amount(self.caja_chica_var.get(), default=0.0)
+        if caja_chica < 0:
+            messagebox.showwarning("Caja chica inválida", "La caja chica inicial debe ser un número >= 0.")
+            return
+
+        try:
+            updated = actualizar_caja_chica_jornada(fecha, caja_chica, db=self.db)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo modificar caja chica:\n{e}")
+            return
+
+        caja_actualizada = float(updated.get("caja_chica_inicial") or 0)
+        self.caja_chica_var.set(f"{caja_actualizada:.2f}")
+        if self._last:
+            self._last["caja_chica_inicial"] = caja_actualizada
+        self._current_corte = updated
+        self._recalculate_totals()
+        self.status_var.set("Caja chica actualizada para la jornada abierta.")
+        messagebox.showinfo("OK", "Caja chica actualizada.")
 
     def _reabrir_jornada(self):
         fecha = self._parse_fecha()
