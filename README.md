@@ -74,6 +74,22 @@ BARBACOA_TIMEZONE=America/Mexico_City
 python app/main.py
 ```
 
+## Validador rapido
+
+Para validar el programa despues de cambios:
+
+```bash
+./.venv/bin/python scripts/validate_program.py
+```
+
+Si tambien quieres validar conexion real a Supabase:
+
+```bash
+./.venv/bin/python scripts/validate_program.py --online
+```
+
+El validador imprime cada chequeo con `OK`, `ERROR` o `SKIP` y termina con resumen final.
+
 ## Branding (AutoNoma)
 
 Logo en `app/assets/`:
