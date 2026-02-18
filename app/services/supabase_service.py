@@ -345,6 +345,52 @@ class SupabaseService(OfflineSync):
             raise ValueError("hasta debe ser >= desde")
         return self.propinas_repo.list_by_range(desde.isoformat(), hasta.isoformat())
 
+    def listar_propinas_dia_detalle(self, fecha: date) -> list[dict]:
+        if not isinstance(fecha, date):
+            raise ValueError("fecha debe ser date")
+        desde, hasta = self._day_range(fecha)
+        rows = self.propinas_repo.list_by_range(desde, hasta)
+        rows.sort(key=lambda r: str(r.get("fecha") or ""), reverse=True)
+        return rows
+
+    def actualizar_propina(
+        self,
+        propina_id: str,
+        *,
+        monto: float,
+        mesero_id: str | None = None,
+        mesero_nombre_snapshot: str | None = None,
+        fuente: str = "NO_ESPECIFICADO",
+    ) -> dict:
+        propina_id = str(propina_id or "").strip()
+        if not propina_id:
+            raise ValueError("propina_id es obligatorio")
+
+        existente = self.propinas_repo.get_by_id(propina_id)
+        if not existente:
+            raise ValueError("No existe la propina seleccionada.")
+
+        propina = Propina.from_inputs(
+            monto=monto,
+            mesero_id=mesero_id,
+            mesero_nombre_snapshot=mesero_nombre_snapshot,
+            fuente=fuente,
+            comanda_id=existente.get("comanda_id"),
+        )
+        payload = propina.to_record()
+        # fecha de actualización para ordenar y auditar cambios.
+        payload["fecha"] = datetime.now(timezone.utc).isoformat()
+        return self.propinas_repo.update_fields(propina_id, payload)
+
+    def eliminar_propina(self, propina_id: str) -> None:
+        propina_id = str(propina_id or "").strip()
+        if not propina_id:
+            raise ValueError("propina_id es obligatorio")
+        existente = self.propinas_repo.get_by_id(propina_id)
+        if not existente:
+            raise ValueError("No existe la propina seleccionada.")
+        self.propinas_repo.delete(propina_id)
+
     def _aggregate_propinas_rows(self, rows: list[dict]) -> list[dict]:
         agg: dict[str, dict] = {}
         for r in rows:
@@ -375,6 +421,7 @@ class SupabaseService(OfflineSync):
                     "num_efectivo": 0,
                     "total_efectivo": 0.0,
                     "num_transfer": 0,
+                    "total_transfer": 0.0,
                     "num_no_especificado": 0,
                 }
 
@@ -388,6 +435,7 @@ class SupabaseService(OfflineSync):
                 agg[key]["total_efectivo"] += monto
             elif fuente == "TRANSFER":
                 agg[key]["num_transfer"] += 1
+                agg[key]["total_transfer"] += monto
             else:
                 agg[key]["num_no_especificado"] += 1
 

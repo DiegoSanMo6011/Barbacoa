@@ -193,6 +193,12 @@ class PropinasRepository(SupabaseTable):
     def create(self, propina: Propina) -> dict:
         return self._insert_one(propina.to_record())
 
+    def get_by_id(self, propina_id: str) -> dict | None:
+        rows = self._table().select("*").eq("id", propina_id).limit(1).execute().data or []
+        if not rows:
+            return None
+        return rows[0]
+
     def list_by_range(self, desde: str, hasta: str) -> list[dict]:
         rows = (
             self._table()
@@ -205,6 +211,12 @@ class PropinasRepository(SupabaseTable):
             or []
         )
         return rows
+
+    def update_fields(self, propina_id: str, changes: dict) -> dict:
+        return self._update_one(changes, "id", propina_id)
+
+    def delete(self, propina_id: str) -> None:
+        self._delete_one("id", propina_id)
 
 
 class CierresRepository(SupabaseTable):
