@@ -112,6 +112,10 @@ class POSApp(tk.Tk):
         style.configure("TCombobox", padding=(self._ui_px(7), self._ui_px(7)), font=("Arial", self._ui_px(13)))
         style.configure("Treeview.Heading", font=("Arial", self._ui_px(18), "bold"))
         style.configure("Treeview", rowheight=self._ui_px(54), font=("Arial", self._ui_px(17)))
+        style.configure("Comanda.Treeview.Heading", font=("Arial", self._ui_px(17), "bold"))
+        style.configure("Comanda.Treeview", rowheight=self._ui_px(54), font=("Arial", self._ui_px(17)))
+        style.configure("ComandaCompact.Treeview.Heading", font=("Arial", self._ui_px(15), "bold"))
+        style.configure("ComandaCompact.Treeview", rowheight=self._ui_px(40), font=("Arial", self._ui_px(15)))
         style.configure("Header.TLabel", font=("Arial", self._ui_px(18), "bold"))
         style.configure("Section.TLabel", font=("Arial", self._ui_px(14), "bold"))
         style.configure("Total.TLabel", font=("Arial", self._ui_px(30), "bold"))
@@ -412,8 +416,27 @@ class POSApp(tk.Tk):
         table_frame = ttk.Frame(panel)
         table_frame.grid(row=2, column=0, sticky="nsew", padx=self._ui_px(8), pady=(0, self._ui_px(6)))
         table_frame.grid_columnconfigure(0, weight=1)
-        table_frame.grid_rowconfigure(0, weight=1)
-        self.tree = ttk.Treeview(table_frame, columns=("dec", "qty", "inc", "prod", "unit", "sub"), show="headings")
+        table_frame.grid_rowconfigure(1, weight=1)
+
+        table_meta = ttk.Frame(table_frame)
+        table_meta.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, self._ui_px(4)))
+        table_meta.grid_columnconfigure(0, weight=1)
+        self.ticket_meta_var = tk.StringVar(value="0 productos | 0 piezas")
+        self.ticket_density_var = tk.StringVar(value="")
+        ttk.Label(table_meta, textvariable=self.ticket_meta_var, style="Section.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(
+            table_meta,
+            textvariable=self.ticket_density_var,
+            foreground="#1d4ed8",
+            font=("Arial", self._ui_px(12), "bold"),
+        ).grid(row=0, column=1, sticky="e")
+
+        self.tree = ttk.Treeview(
+            table_frame,
+            columns=("dec", "qty", "inc", "prod", "unit", "sub"),
+            show="headings",
+            style="Comanda.Treeview",
+        )
         self.tree.heading("dec", text="Quitar")
         self.tree.heading("qty", text="Cant")
         self.tree.heading("inc", text="Sumar")
@@ -426,7 +449,11 @@ class POSApp(tk.Tk):
         self.tree.column("prod", width=self._ui_px(400), anchor="w")
         self.tree.column("unit", width=self._ui_px(120), anchor="center")
         self.tree.column("sub", width=self._ui_px(125), anchor="center")
-        self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        self.tree_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree.yview)
+        self.tree_scroll.grid(row=1, column=1, sticky="ns")
+        self.tree.configure(yscrollcommand=self.tree_scroll.set)
+        bind_mousewheel(self.tree, self.tree.yview)
         self.tree.bind("<Button-1>", self._on_tree_click)
         self.tree.bind("<Delete>", lambda _e: self._remove_selected())
         self.tree.bind("<plus>", lambda _e: self._inc_selected())
@@ -873,6 +900,7 @@ class POSApp(tk.Tk):
         self.propina_var.set(snap.get("propina", ""))
         self.recibido_var.set(snap.get("recibido", ""))
         self.items = [it.copy() for it in snap.get("items", [])]
+        self._normalize_items()
         self._toggle_cash_fields()
         self._refresh_ticket()
 
@@ -1018,6 +1046,62 @@ class POSApp(tk.Tk):
         idx = min(self._selected_catalog_index, len(self.filtered) - 1)
         self._add_product_from_catalog(self.filtered[idx], idx)
 
+    def _item_merge_key(self, item: dict) -> tuple[int, str, int]:
+        return (
+            int(item.get("producto_id") or 0),
+            str(item.get("nombre_snapshot") or "").strip(),
+            int(round(float(item.get("precio_unitario") or 0.0) * 100)),
+        )
+
+    def _normalize_items(self) -> None:
+        merged: list[dict] = []
+        index_by_key: dict[tuple[int, str, int], int] = {}
+        for raw in self.items:
+            cleaned = {
+                "producto_id": int(raw.get("producto_id") or 0),
+                "nombre_snapshot": str(raw.get("nombre_snapshot") or "Producto"),
+                "precio_unitario": float(raw.get("precio_unitario") or 0.0),
+                "cantidad": int(raw.get("cantidad") or 0),
+            }
+            if cleaned["cantidad"] <= 0:
+                continue
+            cleaned["subtotal"] = calcular_subtotal(cleaned["precio_unitario"], cleaned["cantidad"])
+            key = self._item_merge_key(cleaned)
+            if key in index_by_key:
+                idx = index_by_key[key]
+                merged[idx]["cantidad"] = int(merged[idx]["cantidad"]) + cleaned["cantidad"]
+                merged[idx]["subtotal"] = calcular_subtotal(merged[idx]["precio_unitario"], merged[idx]["cantidad"])
+            else:
+                index_by_key[key] = len(merged)
+                merged.append(cleaned)
+        self.items = merged
+
+    def _upsert_item(self, new_item: dict) -> int:
+        new_key = self._item_merge_key(new_item)
+        for idx, it in enumerate(self.items):
+            if self._item_merge_key(it) == new_key:
+                qty = int(it.get("cantidad") or 0) + int(new_item.get("cantidad") or 0)
+                it["cantidad"] = qty
+                it["subtotal"] = calcular_subtotal(it["precio_unitario"], qty)
+                return idx
+        self.items.append(new_item)
+        return len(self.items) - 1
+
+    def _update_ticket_meta(self) -> None:
+        lineas = len(self.items)
+        piezas = sum(int(it.get("cantidad") or 0) for it in self.items)
+        self.ticket_meta_var.set(
+            f"{lineas} {'producto' if lineas == 1 else 'productos'} | "
+            f"{piezas} {'pieza' if piezas == 1 else 'piezas'}"
+        )
+
+    def _apply_ticket_density(self) -> None:
+        compact = len(self.items) >= 8
+        style_name = "ComandaCompact.Treeview" if compact else "Comanda.Treeview"
+        if self.tree.cget("style") != style_name:
+            self.tree.configure(style=style_name)
+        self.ticket_density_var.set("Vista compacta activa" if compact else "")
+
     def _add_product_from_catalog(self, product: dict, index: int):
         self._selected_catalog_index = max(0, index)
         try:
@@ -1044,17 +1128,18 @@ class POSApp(tk.Tk):
             nombre_snapshot = f"{nombre_snapshot} ({self._format_weight_label(gramos)})"
 
         sub = calcular_subtotal(unit, qty)
-        self.items.append({
+        focus_idx = self._upsert_item({
             "producto_id": product["id"],
             "nombre_snapshot": nombre_snapshot,
             "precio_unitario": unit,
             "cantidad": qty,
             "subtotal": sub,
         })
-        self._refresh_ticket()
+        self._refresh_ticket(focus_index=focus_idx)
         self._save_current_to_state()
 
-    def _refresh_ticket(self):
+    def _refresh_ticket(self, focus_index: int | None = None):
+        self._apply_ticket_density()
         for row in self.tree.get_children():
             self.tree.delete(row)
         for idx, it in enumerate(self.items):
@@ -1071,8 +1156,14 @@ class POSApp(tk.Tk):
                 ),
                 tags=(tag,),
             )
+        self._update_ticket_meta()
         self.tree.tag_configure("even", background="#ffffff")
         self.tree.tag_configure("odd", background="#f3f4f6")
+        if focus_index is not None and 0 <= focus_index < len(self.items):
+            iid = str(focus_index)
+            self.tree.selection_set(iid)
+            self.tree.focus(iid)
+            self.tree.see(iid)
         total = calcular_total(self.items) if self.items else 0.0
         self.total_var.set(f"${total:.2f}")
         self._update_change()
@@ -1085,7 +1176,8 @@ class POSApp(tk.Tk):
         idx = int(sel[0])
         if 0 <= idx < len(self.items):
             self.items.pop(idx)
-            self._refresh_ticket()
+            next_focus = min(idx, len(self.items) - 1) if self.items else None
+            self._refresh_ticket(focus_index=next_focus)
             self._save_current_to_state()
 
     def _clear_all(self):
@@ -1105,7 +1197,7 @@ class POSApp(tk.Tk):
             it = self.items[idx]
             it["cantidad"] = int(it["cantidad"]) + 1
             it["subtotal"] = calcular_subtotal(it["precio_unitario"], it["cantidad"])
-            self._refresh_ticket()
+            self._refresh_ticket(focus_index=idx)
             self._save_current_to_state()
 
     def _dec_selected(self):
@@ -1116,12 +1208,17 @@ class POSApp(tk.Tk):
         if 0 <= idx < len(self.items):
             it = self.items[idx]
             qty = int(it["cantidad"]) - 1
+            next_focus = idx
             if qty <= 0:
                 self.items.pop(idx)
+                if self.items:
+                    next_focus = min(idx, len(self.items) - 1)
+                else:
+                    next_focus = None
             else:
                 it["cantidad"] = qty
                 it["subtotal"] = calcular_subtotal(it["precio_unitario"], it["cantidad"])
-            self._refresh_ticket()
+            self._refresh_ticket(focus_index=next_focus)
             self._save_current_to_state()
 
     def _on_tree_click(self, event):
@@ -1167,7 +1264,7 @@ class POSApp(tk.Tk):
             it["cantidad"] = qty
             it["subtotal"] = calcular_subtotal(it["precio_unitario"], it["cantidad"])
             editor.destroy()
-            self._refresh_ticket()
+            self._refresh_ticket(focus_index=idx)
             self._save_current_to_state()
 
         def _cancel(_e=None):
