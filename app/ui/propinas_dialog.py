@@ -83,9 +83,12 @@ class PropinasEditorDialog(ctk.CTkToplevel):
         meta = ctk.CTkFrame(self)
         meta.pack(fill="x", padx=12, pady=(10, 6))
         ctk.CTkLabel(meta, text=f"Fecha: {self.fecha.isoformat()}", text_color="#334155").pack(side="left", padx=6, pady=6)
-        ctk.CTkLabel(meta, text="Selecciona un registro y cambia solo el monto.", text_color="#475569").pack(
-            side="right", padx=6, pady=6
+        meta_right = ctk.CTkFrame(meta, fg_color="transparent")
+        meta_right.pack(side="right", padx=6, pady=6)
+        ctk.CTkLabel(meta_right, text="Selecciona un registro y cambia solo el monto.", text_color="#475569").pack(
+            side="left", padx=(0, 10)
         )
+        ttk.Button(meta_right, text="Borrar propina", command=self._delete_selected).pack(side="left")
 
         table_frame = ctk.CTkFrame(self)
         table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 10))
@@ -128,11 +131,8 @@ class PropinasEditorDialog(ctk.CTkToplevel):
         ttk.Button(actions, text="Guardar cambio", style="Accent.TButton", command=self._save_change).grid(
             row=0, column=2, padx=6, pady=8, sticky="ew"
         )
-        ttk.Button(actions, text="Eliminar registro", command=self._delete_selected).grid(
-            row=0, column=3, padx=6, pady=8, sticky="ew"
-        )
-        ttk.Button(actions, text="Refrescar", command=self._load_rows).grid(row=0, column=4, padx=6, pady=8, sticky="ew")
-        ttk.Button(actions, text="Cerrar", command=self.destroy).grid(row=0, column=5, padx=6, pady=8, sticky="ew")
+        ttk.Button(actions, text="Refrescar", command=self._load_rows).grid(row=0, column=3, padx=6, pady=8, sticky="ew")
+        ttk.Button(actions, text="Cerrar", command=self.destroy).grid(row=0, column=4, padx=6, pady=8, sticky="ew")
 
     def _load_rows(self, focus_propina_id: str | None = None):
         self._cancel_inline_edit()
