@@ -29,6 +29,7 @@ def build_ticket_text(payload: dict) -> str:
     propina = float(payload.get("propina") or 0)
     total = float(payload.get("total") or 0)
     items = payload.get("items", [])
+    pagos = payload.get("pagos") or []
 
     if isinstance(fecha_hora, datetime):
         fecha_txt = fecha_hora.strftime("%Y-%m-%d %H:%M")
@@ -54,8 +55,20 @@ def build_ticket_text(payload: dict) -> str:
         lines.append(f"{qty:<5} {nombre_short:<18} ${subtotal:>6.2f}")
 
     lines.append(_line())
-    lines.append(f"Metodo: {metodo}")
-    lines.append(f"Propina: ${propina:.2f}")
+    if pagos:
+        lines.append("Pagos:")
+        for pago in pagos:
+            metodo_pago = str(pago.get("metodo_pago") or "-").strip().upper()
+            monto_pago = float(pago.get("monto") or 0)
+            propina_pago = float(pago.get("propina") or 0)
+            lines.append(f"- {metodo_pago}: ${monto_pago:.2f} | Tip ${propina_pago:.2f}")
+    else:
+        lines.append(f"Metodo: {metodo}")
+        lines.append(f"Propina: ${propina:.2f}")
+    total_propina = float(propina or 0)
+    if pagos:
+        total_propina = round(sum(float(p.get("propina") or 0) for p in pagos), 2)
+    lines.append(f"Propina: ${total_propina:.2f}")
     lines.append(f"TOTAL:   ${total:.2f}")
     lines.append(_line())
     lines.append("FACTURACION")

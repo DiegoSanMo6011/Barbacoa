@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timezone
 
-from domain.corte import calc_ventas_por_metodo
 from .supabase_service import SupabaseService
 
 ESTADO_ABIERTO = "ABIERTO"
@@ -27,15 +26,7 @@ def _normalize_estado(value: str | None) -> str:
 
 def get_ventas_por_metodo(fecha: date, db: SupabaseService | None = None) -> dict:
     db = _get_db(db)
-    desde, hasta = db._day_range(fecha)
-    rows = (
-        db.client.table("comandas")
-        .select("total, metodo_pago")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
-    return calc_ventas_por_metodo(rows)
+    return db.resumen_ventas_por_metodo_dia(fecha)
 
 
 def get_gastos_total(fecha: date, db: SupabaseService | None = None) -> float:

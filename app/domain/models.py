@@ -7,7 +7,7 @@ Se usan validaciones simples para mantener consistencia de datos.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
 from typing import Any
@@ -248,12 +248,14 @@ class ComandaItem(RecordSerializable):
 @dataclass(slots=True)
 class ComandaDraft(RecordSerializable):
     mesero: str
+    mesa: str
     metodo_pago: MetodoPago
     total: float
     recibido: float | None
     cambio: float | None
     items: list[ComandaItem]
     propina: float | None = None
+    pagos: list[dict] = field(default_factory=list)
 
     @classmethod
     def from_raw(
@@ -263,24 +265,81 @@ class ComandaDraft(RecordSerializable):
         total: float,
         recibido: float | None,
         cambio: float | None,
+        mesa: str | None = None,
         items: list[dict] | None = None,
         propina: float | None = None,
+        pagos: list[dict] | None = None,
     ) -> "ComandaDraft":
+        total_num = _round2(float(total))
+        if total_num < 0:
+            raise ValueError("total debe ser >= 0")
+
         items = items or []
         parsed_items = [ComandaItem.from_raw(it) for it in items]
+        pagos_raw = pagos or []
+        parsed_pagos: list[dict] = []
+        for idx, raw in enumerate(pagos_raw):
+            metodo = MetodoPago.from_raw(raw.get("metodo_pago"))
+            monto = _round2(float(raw.get("monto") or 0))
+            if monto < 0:
+                raise ValueError("monto de pago debe ser >= 0")
+            propina_pago = _coerce_optional_float(raw.get("propina"))
+            if propina_pago is None:
+                propina_pago = 0.0
+            if propina_pago < 0:
+                raise ValueError("propina de pago debe ser >= 0")
+            recibido_pago = _coerce_optional_float(raw.get("recibido"))
+            cambio_pago = _coerce_optional_float(raw.get("cambio"))
+            parsed_pagos.append(
+                {
+                    "orden": int(raw.get("orden") or idx + 1),
+                    "metodo_pago": metodo.value,
+                    "monto": monto,
+                    "recibido": None if recibido_pago is None else _round2(recibido_pago),
+                    "cambio": None if cambio_pago is None else _round2(cambio_pago),
+                    "propina": _round2(propina_pago),
+                }
+            )
+            if metodo == MetodoPago.EFECTIVO and recibido_pago is not None and recibido_pago < monto:
+                raise ValueError("en efectivo, recibido debe ser >= monto")
+        if not parsed_pagos:
+            metodo = MetodoPago.from_raw(metodo_pago)
+            propina_base = _coerce_optional_float(propina)
+            if propina_base is None:
+                propina_base = 0.0
+            recibido_base = _coerce_optional_float(recibido)
+            if metodo == MetodoPago.EFECTIVO and recibido_base is not None and recibido_base < total_num:
+                raise ValueError("en efectivo, recibido debe ser >= total")
+            parsed_pagos = [
+                {
+                    "orden": 1,
+                    "metodo_pago": metodo.value,
+                    "monto": total_num,
+                    "recibido": recibido_base,
+                    "cambio": _coerce_optional_float(cambio),
+                    "propina": _round2(max(0.0, float(propina_base))),
+                }
+            ]
+        suma_pagos = _round2(sum(float(p.get("monto") or 0) for p in parsed_pagos))
+        if abs(suma_pagos - total_num) > 0.01:
+            raise ValueError("la suma de pagos debe ser igual al total")
+        propina_total = _round2(sum(float(p.get("propina") or 0) for p in parsed_pagos))
         return cls(
             mesero=_clean_text(mesero),
-            metodo_pago=MetodoPago.from_raw(metodo_pago),
-            total=_round2(float(total)),
+            mesa=_clean_text(mesa),
+            metodo_pago=MetodoPago.from_raw(parsed_pagos[0]["metodo_pago"]),
+            total=total_num,
             recibido=_coerce_optional_float(recibido),
             cambio=_coerce_optional_float(cambio),
             items=parsed_items,
-            propina=_coerce_optional_float(propina),
+            propina=propina_total,
+            pagos=parsed_pagos,
         )
 
     def to_record(self) -> dict:
         return {
             "mesero": _clean_text(self.mesero),
+            "mesa": _clean_text(self.mesa) or None,
             "metodo_pago": self.metodo_pago.value,
             "total": _round2(self.total),
             "recibido": None if self.recibido is None else _round2(self.recibido),
@@ -291,12 +350,14 @@ class ComandaDraft(RecordSerializable):
     def to_offline_payload(self) -> dict:
         return {
             "mesero": _clean_text(self.mesero),
+            "mesa": _clean_text(self.mesa),
             "metodo_pago": self.metodo_pago.value,
             "total": _round2(self.total),
             "recibido": self.recibido,
             "cambio": self.cambio,
             "items": [item.to_record() for item in self.items],
             "propina": self.propina,
+            "pagos": list(self.pagos),
         }
 
 

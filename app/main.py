@@ -21,10 +21,12 @@ from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
 from ui.corte_view import CorteView
 from ui.reportes_view import ReportesView
+from ui.historial_tickets_view import HistorialTicketsView
 from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
 from ui.ticket_preview import TicketPreview
 from ui.change_pin_dialog import ChangePinDialog
+from ui.payments_dialog import ask_split_payments
 from ui.messagebox_fix import install_messagebox_parenting
 from services.printer import print_ticket_text, should_autoprint
 from ui.mousewheel import bind_mousewheel
@@ -128,6 +130,7 @@ class POSApp(tk.Tk):
         self._meseros_refresh_ttl_s = self._load_meseros_refresh_ttl()
         self._sync_in_progress = False
         self._admin_dialogs: dict[str, tk.Toplevel] = {}
+        self.pagos_mixtos: list[dict] = []
 
         self.items = []  # dict: producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal
         self.filtered = []
@@ -311,6 +314,7 @@ class POSApp(tk.Tk):
         self._add_more_menu_item("productos", "Productos", self._open_productos)
         self._add_more_menu_item("corte", "Corte", self._open_corte)
         self._add_more_menu_item("reportes", "Reportes", self._open_reportes)
+        self._add_more_menu_item("historial", "Historial tickets", self._open_historial_tickets)
         self.more_menu.add_separator()
         self._add_more_menu_item("change_pin", "Cambiar PIN", self._open_change_pin)
         self.btn_more.configure(menu=self.more_menu)
@@ -515,6 +519,11 @@ class POSApp(tk.Tk):
         self.propina_entry.bind("<Return>", lambda _e: self._save_comanda())
         self.propina_entry.bind("<KeyRelease>", lambda _e: self._save_current_to_state())
 
+        ttk.Button(pay2, text="Pagos mixtos", command=self._open_split_payments).pack(
+            side="left", padx=(self._ui_px(10), self._ui_px(4))
+        )
+        ttk.Button(pay2, text="Limpiar mixto", command=self._clear_split_payments).pack(side="left")
+
         self.cash_frame = ttk.Frame(panel)
         self.cash_frame.pack(fill="x", pady=(self._ui_px(6), 0))
         ttk.Label(self.cash_frame, text="Recibido:").pack(side="left")
@@ -531,7 +540,19 @@ class POSApp(tk.Tk):
             font=("Arial", self._ui_px(15), "bold"),
         ).pack(side="left", padx=self._ui_px(8))
 
+        self.pagos_summary_var = tk.StringVar(value="")
+        tk.Label(
+            panel,
+            textvariable=self.pagos_summary_var,
+            bg="#f3f4f6",
+            fg="#1f2937",
+            font=("Arial", self._ui_px(11), "bold"),
+            anchor="w",
+            justify="left",
+        ).pack(fill="x", pady=(self._ui_px(6), 0))
+
         self._toggle_cash_fields()
+        self._refresh_split_payment_summary()
         self.save_btn = ttk.Button(panel, text="GUARDAR COMANDA", style="Accent.TButton", command=self._save_comanda)
         self.save_btn.pack(fill="x", pady=(self._ui_px(8), self._ui_px(6)))
 
@@ -581,6 +602,7 @@ class POSApp(tk.Tk):
             "propinas": self.auth.can(Permission.PROPINAS),
             "corte": self.auth.can(Permission.CORTE),
             "reportes": self.auth.can(Permission.REPORTES),
+            "historial": self.auth.can(Permission.COMANDAS),
             "personal": self.auth.can(Permission.PERSONAL),
             "productos": self.auth.can(Permission.PRODUCTOS),
         }
@@ -890,6 +912,7 @@ class POSApp(tk.Tk):
             "metodo": self.metodo_var.get(),
             "propina": self.propina_var.get().strip(),
             "recibido": self.recibido_var.get().strip(),
+            "pagos_mixtos": [dict(p) for p in self.pagos_mixtos],
             "items": [it.copy() for it in self.items],
         }
 
@@ -899,9 +922,11 @@ class POSApp(tk.Tk):
         self.metodo_var.set(snap.get("metodo", "EFECTIVO"))
         self.propina_var.set(snap.get("propina", ""))
         self.recibido_var.set(snap.get("recibido", ""))
+        self.pagos_mixtos = [dict(p) for p in (snap.get("pagos_mixtos") or [])]
         self.items = [it.copy() for it in snap.get("items", [])]
         self._normalize_items()
         self._toggle_cash_fields()
+        self._refresh_split_payment_summary()
         self._refresh_ticket()
 
     def _save_current_to_state(self):
@@ -923,6 +948,7 @@ class POSApp(tk.Tk):
             "metodo": "EFECTIVO",
             "propina": "",
             "recibido": "",
+            "pagos_mixtos": [],
             "items": [],
         })
         self.active_comanda = len(self.comandas) - 1
@@ -1167,6 +1193,7 @@ class POSApp(tk.Tk):
         total = calcular_total(self.items) if self.items else 0.0
         self.total_var.set(f"${total:.2f}")
         self._update_change()
+        self._refresh_split_payment_summary()
         self._update_comandas_list()
 
     def _remove_selected(self):
@@ -1185,6 +1212,9 @@ class POSApp(tk.Tk):
         self._refresh_ticket()
         if hasattr(self, "propina_var"):
             self.propina_var.set("")
+        self.pagos_mixtos = []
+        self._refresh_split_payment_summary()
+        self._toggle_cash_fields()
         self.mesero_menu.focus_set()
         self._save_current_to_state()
 
@@ -1278,15 +1308,24 @@ class POSApp(tk.Tk):
         editor.place(x=x, y=y, width=w, height=h)
 
     def _toggle_cash_fields(self):
+        if self.pagos_mixtos:
+            self.cash_frame.pack_forget()
+            self._refresh_split_payment_summary()
+            self._save_current_to_state()
+            return
         if self.metodo_var.get() == "EFECTIVO":
             self.cash_frame.pack(fill="x", pady=(self._ui_px(8), 0))
         else:
             self.cash_frame.pack_forget()
             self.recibido_var.set("")
             self.cambio_var.set("0.00")
+        self._refresh_split_payment_summary()
         self._save_current_to_state()
 
     def _update_change(self):
+        if self.pagos_mixtos:
+            self.cambio_var.set("0.00")
+            return
         if self.metodo_var.get() != "EFECTIVO":
             return
         total = calcular_total(self.items) if self.items else 0.0
@@ -1300,6 +1339,112 @@ class POSApp(tk.Tk):
             self.cambio_var.set("0.00")
             return
         self.cambio_var.set(f"{(recibido - total):.2f}")
+
+    def _single_payment_from_fields(self, total: float) -> list[dict] | None:
+        metodo = self.metodo_var.get()
+        propina_txt = (self.propina_var.get().strip() if hasattr(self, "propina_var") else "")
+        propina = 0.0
+        if propina_txt:
+            try:
+                propina = float(propina_txt)
+                if propina < 0:
+                    raise ValueError
+            except Exception:
+                messagebox.showwarning("Propina inválida", "La propina debe ser un número >= 0.")
+                return None
+
+        recibido = None
+        cambio = None
+        if metodo == "EFECTIVO":
+            try:
+                recibido = float(self.recibido_var.get().strip())
+            except Exception:
+                messagebox.showwarning("Recibido inválido", "Escribe cuánto recibiste.")
+                return None
+            if recibido < total:
+                messagebox.showwarning("Insuficiente", "El recibido debe ser >= total.")
+                return None
+            cambio = round(recibido - total, 2)
+
+        return [
+            {
+                "orden": 1,
+                "metodo_pago": metodo,
+                "monto": round(total, 2),
+                "propina": round(propina, 2),
+                "recibido": recibido,
+                "cambio": cambio,
+            }
+        ]
+
+    def _refresh_split_payment_summary(self):
+        if not hasattr(self, "pagos_summary_var"):
+            return
+        if not self.pagos_mixtos:
+            self.pagos_summary_var.set("")
+            return
+        suma = round(sum(float(p.get("monto") or 0) for p in self.pagos_mixtos), 2)
+        total = round(calcular_total(self.items) if self.items else 0.0, 2)
+        diff = round(suma - total, 2)
+        parts: list[str] = []
+        for pago in self.pagos_mixtos:
+            metodo = str(pago.get("metodo_pago") or "-").strip().upper()
+            monto = float(pago.get("monto") or 0)
+            tip = float(pago.get("propina") or 0)
+            parts.append(f"{metodo}: ${monto:.2f} (tip ${tip:.2f})")
+        summary = " | ".join(parts)
+        self.pagos_summary_var.set(f"Pagos mixtos activos -> {summary} | Suma: ${suma:.2f} | Diff: ${diff:+.2f}")
+
+    def _open_split_payments(self):
+        total = round(calcular_total(self.items) if self.items else 0.0, 2)
+        if total <= 0:
+            messagebox.showwarning("Pagos mixtos", "Agrega productos antes de capturar pagos mixtos.")
+            return
+        initial = [dict(p) for p in self.pagos_mixtos]
+        if not initial:
+            metodo = str(self.metodo_var.get() or "EFECTIVO").strip().upper()
+            if metodo not in {"EFECTIVO", "TARJETA", "TRANSFER"}:
+                metodo = "EFECTIVO"
+            try:
+                propina_seed = float((self.propina_var.get() or "").strip() or 0)
+                if propina_seed < 0:
+                    propina_seed = 0.0
+            except Exception:
+                propina_seed = 0.0
+            recibido_seed = None
+            cambio_seed = None
+            if metodo == "EFECTIVO":
+                try:
+                    recibido_seed = float((self.recibido_var.get() or "").strip() or total)
+                except Exception:
+                    recibido_seed = total
+                if recibido_seed < total:
+                    recibido_seed = total
+                recibido_seed = round(recibido_seed, 2)
+                cambio_seed = round(recibido_seed - total, 2)
+            initial = [
+                {
+                    "orden": 1,
+                    "metodo_pago": metodo,
+                    "monto": round(total, 2),
+                    "propina": round(propina_seed, 2),
+                    "recibido": recibido_seed,
+                    "cambio": cambio_seed,
+                }
+            ]
+        pagos = ask_split_payments(self, total=total, initial_rows=initial)
+        if pagos is None:
+            return
+        self.pagos_mixtos = pagos
+        self._toggle_cash_fields()
+        self._refresh_split_payment_summary()
+        self._save_current_to_state()
+
+    def _clear_split_payments(self):
+        self.pagos_mixtos = []
+        self._toggle_cash_fields()
+        self._refresh_split_payment_summary()
+        self._save_current_to_state()
 
     def _save_comanda(self):
         if not self._meseros_activos:
@@ -1317,42 +1462,56 @@ class POSApp(tk.Tk):
         if not mesero or mesero not in self._meseros_activos:
             messagebox.showwarning("Mesero inválido", "Selecciona un mesero activo de la lista.")
             return
-        metodo = self.metodo_var.get()
+        mesa = self.mesa_var.get().strip()
         total = calcular_total(self.items)
-
-        propina_txt = (self.propina_var.get().strip() if hasattr(self, "propina_var") else "")
-        propina = 0.0
-        if propina_txt:
-            try:
-                propina = float(propina_txt)
-                if propina < 0:
-                    raise ValueError
-            except Exception:
-                messagebox.showwarning("Propina inválida", "La propina debe ser un número >= 0.")
+        pagos = [dict(p) for p in self.pagos_mixtos] if self.pagos_mixtos else None
+        if pagos is None:
+            pagos = self._single_payment_from_fields(total)
+            if pagos is None:
                 return
-
-        recibido = None
-        cambio = None
-
-        if metodo == "EFECTIVO":
-            try:
-                recibido = float(self.recibido_var.get().strip())
-            except Exception:
-                messagebox.showwarning("Recibido inválido", "Escribe cuánto recibiste.")
-                return
-            if recibido < total:
-                messagebox.showwarning("Insuficiente", "El recibido debe ser >= total.")
-                return
-            cambio = recibido - total
+        suma_pagos = round(sum(float(p.get("monto") or 0) for p in pagos), 2)
+        if abs(suma_pagos - round(total, 2)) > 0.01:
+            messagebox.showwarning(
+                "Pagos inválidos",
+                f"La suma de pagos (${suma_pagos:.2f}) debe ser igual al total (${total:.2f}).",
+            )
+            return
+        propina_total = round(sum(float(p.get("propina") or 0) for p in pagos), 2)
+        metodo = self.metodo_var.get()
+        if pagos:
+            metodo = max(pagos, key=lambda p: float(p.get("monto") or 0)).get("metodo_pago") or metodo
+        recibido_principal = None
+        cambio_principal = None
+        if len(pagos) == 1:
+            recibido_principal = pagos[0].get("recibido")
+            cambio_principal = pagos[0].get("cambio")
 
         try:
             self.logger.info("save_comanda:start metodo=%s total=%.2f mesero=%s", metodo, total, mesero)
-            result = self.db.guardar_comanda(mesero, metodo, total, recibido, cambio, self.items, propina)
-            ticket_path, ticket_text = self._create_ticket(result, mesero, metodo, total, propina)
+            result = self.db.guardar_comanda(
+                mesero,
+                mesa,
+                metodo,
+                total,
+                recibido_principal,
+                cambio_principal,
+                self.items,
+                propina_total,
+                pagos=pagos,
+            )
+            ticket_path, ticket_text = self._create_ticket(result, mesero, metodo, total, propina_total, pagos)
+            if result.get("id"):
+                self.db.guardar_ticket_historial(
+                    comanda_id=str(result.get("id")),
+                    ticket_text=ticket_text,
+                    tipo="ORIGINAL",
+                    created_by=self.auth.current_role().value,
+                    strict=False,
+                )
             if result.get("offline"):
-                messagebox.showinfo("OK", f"Comanda guardada localmente.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+                messagebox.showinfo("OK", f"Comanda guardada localmente.\nTotal: ${total:.2f}\nPagos: {len(pagos)} método(s)")
             else:
-                messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nMétodo: {metodo}")
+                messagebox.showinfo("OK", f"Comanda guardada.\nTotal: ${total:.2f}\nPagos: {len(pagos)} método(s)")
             self._maybe_print_ticket(ticket_text)
             self._show_ticket_preview(ticket_text, ticket_path)
             # Cerrar comanda actual y abrir una nueva
@@ -1367,6 +1526,7 @@ class POSApp(tk.Tk):
                     self._refresh_ticket()
             self._persist_comandas()
             self._new_comanda()
+            self._clear_split_payments()
             self.logger.info("save_comanda:done folio=%s", result.get("folio"))
         except Exception as e:
             self.logger.exception("save_comanda:error")
@@ -1434,6 +1594,11 @@ class POSApp(tk.Tk):
         if not self._ensure_permission(Permission.REPORTES, "abrir Reportes"):
             return
         self._open_admin_dialog("reportes", lambda: ReportesView(self, self.db))
+
+    def _open_historial_tickets(self):
+        if not self._ensure_permission(Permission.COMANDAS, "abrir Historial de tickets"):
+            return
+        self._open_admin_dialog("historial", lambda: HistorialTicketsView(self, self.db, self.auth))
 
     def _open_personal(self):
         if not self._ensure_permission(Permission.PERSONAL, "abrir Personal"):
@@ -1507,7 +1672,15 @@ class POSApp(tk.Tk):
         self.save_btn.configure(state="disabled")
         self.mesero_status_var.set("Sin meseros activos")
 
-    def _create_ticket(self, comanda: dict, mesero: str, metodo: str, total: float, propina: float) -> tuple[str, str]:
+    def _create_ticket(
+        self,
+        comanda: dict,
+        mesero: str,
+        metodo: str,
+        total: float,
+        propina: float,
+        pagos: list[dict] | None = None,
+    ) -> tuple[str, str]:
         if not self._ticket_save_enabled():
             return "", build_ticket_text({
                 "negocio": "Barbacoa de Miranda",
@@ -1519,6 +1692,7 @@ class POSApp(tk.Tk):
                 "propina": propina or 0,
                 "total": total,
                 "items": list(self.items),
+                "pagos": list(pagos or []),
             })
         folio = comanda.get("folio")
         ts = datetime.now()
@@ -1535,6 +1709,7 @@ class POSApp(tk.Tk):
             "propina": propina or 0,
             "total": total,
             "items": list(self.items),
+            "pagos": list(pagos or []),
         }
         ticket_text = build_ticket_text(payload)
 
