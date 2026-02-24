@@ -23,42 +23,43 @@ def _parse_iso(dt_str: str) -> datetime:
     return datetime.fromisoformat(dt_str)
 
 
+def _active_comandas_rows(db: SupabaseService, *, desde: str, hasta: str, columns: str) -> list[dict]:
+    def _columns_without_status(raw: str) -> str:
+        parts = [p.strip() for p in str(raw or "").split(",") if p.strip()]
+        filtered = [p for p in parts if p.lower() != "status"]
+        return ", ".join(filtered) or "id"
+
+    query = db.client.table("comandas").select(columns).gte("created_at", desde).lte("created_at", hasta)
+    try:
+        rows = query.neq("status", "CANCELADA").execute().data or []
+    except Exception as exc:
+        try:
+            rows = query.execute().data or []
+        except Exception as inner_exc:
+            msg = str(inner_exc).lower()
+            if "status" in msg and ("column" in msg or "schema cache" in msg):
+                rows = (
+                    db.client.table("comandas")
+                    .select(_columns_without_status(columns))
+                    .gte("created_at", desde)
+                    .lte("created_at", hasta)
+                    .execute()
+                ).data or []
+            else:
+                raise inner_exc from exc
+    return [r for r in rows if str(r.get("status") or "").upper() != "CANCELADA"]
+
+
 def resumen_ventas_por_metodo(fecha: date, db: SupabaseService | None = None) -> dict:
     db = _get_db(db)
-    desde, hasta = db._day_range(fecha)
-
-    rows = (
-        db.client.table("comandas")
-        .select("total, metodo_pago")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
-
-    resumen = {"EFECTIVO": 0.0, "TARJETA": 0.0, "TRANSFER": 0.0, "total": 0.0}
-    for r in rows:
-        total = float(r.get("total") or 0)
-        metodo = r.get("metodo_pago") or ""
-        if metodo in resumen:
-            resumen[metodo] += total
-        resumen["total"] += total
-
-    for k in ("EFECTIVO", "TARJETA", "TRANSFER", "total"):
-        resumen[k] = round(float(resumen[k]), 2)
-    return resumen
+    return db.resumen_ventas_por_metodo_dia(fecha)
 
 
 def top_productos(fecha: date, limit: int = 10, db: SupabaseService | None = None) -> list[dict]:
     db = _get_db(db)
     desde, hasta = db._day_range(fecha)
 
-    comandas = (
-        db.client.table("comandas")
-        .select("id")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
+    comandas = _active_comandas_rows(db, desde=desde, hasta=hasta, columns="id, status")
 
     comanda_ids = [c["id"] for c in comandas]
     if not comanda_ids:
@@ -96,14 +97,8 @@ def ventas_por_hora(fecha: date, db: SupabaseService | None = None) -> list[dict
     db = _get_db(db)
     desde, hasta = db._day_range(fecha)
 
-    rows = (
-        db.client.table("comandas")
-        .select("created_at, total")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .order("created_at")
-        .execute()
-    ).data or []
+    rows = _active_comandas_rows(db, desde=desde, hasta=hasta, columns="created_at, total, status")
+    rows.sort(key=lambda x: str(x.get("created_at") or ""))
 
     # Inicializa 24 horas
     horas = [{"hora": h, "total": 0.0, "num_comandas": 0} for h in range(24)]

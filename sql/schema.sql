@@ -44,10 +44,52 @@ CREATE TABLE public.comandas (
   total numeric NOT NULL CHECK (total >= 0::numeric),
   notas text,
   mesero text,
+  mesa text,
   recibido numeric,
   cambio numeric,
-  status text NOT NULL DEFAULT 'PAGADA'::text,
+  status text NOT NULL DEFAULT 'PAGADA'::text CHECK (status = ANY (ARRAY['PAGADA'::text, 'CANCELADA'::text, 'CORREGIDA'::text])),
+  cancelada_at timestamp with time zone,
+  cancelada_por text,
+  cancelacion_motivo text,
   CONSTRAINT comandas_pkey PRIMARY KEY (id)
+);
+
+CREATE TABLE public.comanda_pagos (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  comanda_id uuid NOT NULL,
+  orden integer NOT NULL DEFAULT 1,
+  metodo_pago text NOT NULL CHECK (metodo_pago = ANY (ARRAY['EFECTIVO'::text, 'TARJETA'::text, 'TRANSFER'::text])),
+  monto numeric NOT NULL CHECK (monto >= 0::numeric),
+  recibido numeric,
+  cambio numeric,
+  propina numeric NOT NULL DEFAULT 0::numeric CHECK (propina >= 0::numeric),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT comanda_pagos_pkey PRIMARY KEY (id),
+  CONSTRAINT comanda_pagos_comanda_id_fkey FOREIGN KEY (comanda_id) REFERENCES public.comandas(id)
+);
+
+CREATE TABLE public.comanda_correcciones (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  comanda_id uuid NOT NULL,
+  motivo text NOT NULL,
+  before_payload jsonb NOT NULL,
+  after_payload jsonb NOT NULL,
+  corregido_por text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT comanda_correcciones_pkey PRIMARY KEY (id),
+  CONSTRAINT comanda_correcciones_comanda_id_fkey FOREIGN KEY (comanda_id) REFERENCES public.comandas(id)
+);
+
+CREATE TABLE public.ticket_historial (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  comanda_id uuid NOT NULL,
+  version integer NOT NULL,
+  tipo text NOT NULL CHECK (tipo = ANY (ARRAY['ORIGINAL'::text, 'CORREGIDO'::text])),
+  ticket_text text NOT NULL,
+  created_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT ticket_historial_pkey PRIMARY KEY (id),
+  CONSTRAINT ticket_historial_comanda_id_fkey FOREIGN KEY (comanda_id) REFERENCES public.comandas(id)
 );
 
 CREATE TABLE public.gastos (

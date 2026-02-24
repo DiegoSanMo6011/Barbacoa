@@ -43,6 +43,39 @@ def _range_iso(db: SupabaseService, fecha_inicio: date, fecha_fin: date) -> tupl
     return desde, hasta
 
 
+def _active_comandas_rows(
+    db: SupabaseService,
+    *,
+    desde: str,
+    hasta: str,
+    columns: str,
+) -> list[dict]:
+    def _columns_without_status(raw: str) -> str:
+        parts = [p.strip() for p in str(raw or "").split(",") if p.strip()]
+        filtered = [p for p in parts if p.lower() != "status"]
+        return ", ".join(filtered) or "id"
+
+    query = db.client.table("comandas").select(columns).gte("created_at", desde).lte("created_at", hasta)
+    try:
+        rows = query.neq("status", "CANCELADA").execute().data or []
+    except Exception as exc:
+        try:
+            rows = query.execute().data or []
+        except Exception as inner_exc:
+            msg = str(inner_exc).lower()
+            if "status" in msg and ("column" in msg or "schema cache" in msg):
+                rows = (
+                    db.client.table("comandas")
+                    .select(_columns_without_status(columns))
+                    .gte("created_at", desde)
+                    .lte("created_at", hasta)
+                    .execute()
+                ).data or []
+            else:
+                raise inner_exc from exc
+    return [r for r in rows if str(r.get("status") or "").upper() != "CANCELADA"]
+
+
 def get_top_productos(
     fecha_inicio: date,
     fecha_fin: date,
@@ -52,13 +85,7 @@ def get_top_productos(
     db = _get_db(db)
     desde, hasta = _range_iso(db, fecha_inicio, fecha_fin)
 
-    comandas = (
-        db.client.table("comandas")
-        .select("id")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
+    comandas = _active_comandas_rows(db, desde=desde, hasta=hasta, columns="id, status")
 
     comanda_ids = [c["id"] for c in comandas]
     if not comanda_ids:
@@ -96,14 +123,8 @@ def get_ventas_por_dia(
     db = _get_db(db)
     desde, hasta = _range_iso(db, fecha_inicio, fecha_fin)
 
-    rows = (
-        db.client.table("comandas")
-        .select("created_at, total")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .order("created_at")
-        .execute()
-    ).data or []
+    rows = _active_comandas_rows(db, desde=desde, hasta=hasta, columns="created_at, total, status")
+    rows.sort(key=lambda x: str(x.get("created_at") or ""))
 
     agg: dict[str, float] = {}
     for r in rows:
@@ -124,27 +145,7 @@ def get_ventas_por_metodo(
     db: SupabaseService | None = None,
 ) -> dict:
     db = _get_db(db)
-    desde, hasta = _range_iso(db, fecha_inicio, fecha_fin)
-
-    rows = (
-        db.client.table("comandas")
-        .select("total, metodo_pago")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
-
-    resumen = {"EFECTIVO": 0.0, "TARJETA": 0.0, "TRANSFER": 0.0, "total": 0.0}
-    for r in rows:
-        total = float(r.get("total") or 0)
-        metodo = r.get("metodo_pago") or ""
-        if metodo in resumen:
-            resumen[metodo] += total
-        resumen["total"] += total
-
-    for k in ("EFECTIVO", "TARJETA", "TRANSFER", "total"):
-        resumen[k] = round(float(resumen[k]), 2)
-    return resumen
+    return db.resumen_ventas_por_metodo_rango(fecha_inicio, fecha_fin)
 
 
 def get_ventas_por_mesero(
@@ -156,13 +157,7 @@ def get_ventas_por_mesero(
     db = _get_db(db)
     desde, hasta = _range_iso(db, fecha_inicio, fecha_fin)
 
-    rows = (
-        db.client.table("comandas")
-        .select("mesero, total")
-        .gte("created_at", desde)
-        .lte("created_at", hasta)
-        .execute()
-    ).data or []
+    rows = _active_comandas_rows(db, desde=desde, hasta=hasta, columns="mesero, total, status")
 
     agg: dict[str, float] = {}
     for r in rows:

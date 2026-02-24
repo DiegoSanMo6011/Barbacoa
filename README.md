@@ -147,6 +147,9 @@ Migración recomendada para origen de propinas por método:
 Migración recomendada para venta por gramos y orden del catálogo en productos:
 - `sql/productos_venta_por_gramo.sql`
 
+Migración recomendada para cancelación auditada, pagos mixtos y historial de tickets:
+- `sql/comandas_pagos_auditoria.sql`
+
 ## Seed inicial de roles
 
 Configura en `.env`:
@@ -196,6 +199,21 @@ git checkout main
 Ejecutar manual:
 ```bash
 ./scripts/run_pos.sh
+```
+
+## Flujo de ingeniería y releases
+
+- Estrategia de ramas y PR: `docs/ENGINEERING_WORKFLOW.md`
+- Runbook de salida R5 (POS core): `docs/R5_RELEASE_RUNBOOK.md`
+- Plantilla de aviso a clientes: `docs/CLIENT_UPDATE_TEMPLATE.md`
+- Plantilla obligatoria de PR: `.github/pull_request_template.md`
+- Backup previo a migraciones:
+```bash
+SUPABASE_DB_URL=... ./scripts/backup_supabase.sh
+```
+- Restore para rollback:
+```bash
+SUPABASE_DB_URL=... ./scripts/restore_supabase.sh backups/db/supabase_YYYYMMDD_HHMMSS.dump
 ```
 
 ---

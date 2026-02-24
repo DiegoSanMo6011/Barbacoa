@@ -20,6 +20,7 @@ from domain.models import (
     Producto,
     Propina,
 )
+from domain.ticket import build_ticket_text
 from .offline_ops import (
     CierreOperation,
     ComandaOperation,
@@ -30,12 +31,15 @@ from .offline_ops import (
 from .offline_store import OfflineStore
 from .repositories import (
     CierresRepository,
+    ComandaCorreccionesRepository,
     ComandaItemsRepository,
+    ComandaPagosRepository,
     ComandasRepository,
     GastosRepository,
     MeserosRepository,
     ProductosRepository,
     PropinasRepository,
+    TicketHistorialRepository,
     UsuariosRepository,
 )
 from .settings import SUPABASE_KEY, SUPABASE_URL
@@ -64,6 +68,9 @@ class SupabaseService(OfflineSync):
         self.meseros_repo = MeserosRepository(self.client)
         self.comandas_repo = ComandasRepository(self.client)
         self.items_repo = ComandaItemsRepository(self.client)
+        self.pagos_repo = ComandaPagosRepository(self.client)
+        self.correcciones_repo = ComandaCorreccionesRepository(self.client)
+        self.ticket_historial_repo = TicketHistorialRepository(self.client)
         self.gastos_repo = GastosRepository(self.client)
         self.propinas_repo = PropinasRepository(self.client)
         self.cierres_repo = CierresRepository(self.client)
@@ -195,6 +202,8 @@ class SupabaseService(OfflineSync):
         total: float,
         recibido: float | None,
         cambio: float | None,
+        mesa: str | None = None,
+        pagos: list[dict] | None = None,
     ) -> dict:
         draft = ComandaDraft.from_raw(
             mesero=mesero,
@@ -202,20 +211,24 @@ class SupabaseService(OfflineSync):
             total=total,
             recibido=recibido,
             cambio=cambio,
+            mesa=mesa,
             items=[],
             propina=None,
+            pagos=pagos,
         )
         return self.comandas_repo.create(draft)
 
     def guardar_comanda(
         self,
         mesero: str,
+        mesa: str,
         metodo_pago: str,
         total: float,
         recibido: float | None,
         cambio: float | None,
         items: list[dict],
         propina: float | None = None,
+        pagos: list[dict] | None = None,
     ) -> dict:
         draft = ComandaDraft.from_raw(
             mesero=mesero,
@@ -223,13 +236,17 @@ class SupabaseService(OfflineSync):
             total=total,
             recibido=recibido,
             cambio=cambio,
+            mesa=mesa,
             items=items,
             propina=propina,
+            pagos=pagos,
         )
 
         try:
             return self._insert_comanda(draft)
-        except Exception:
+        except Exception as exc:
+            if not self._should_enqueue_offline(exc):
+                raise
             self.offline.enqueue(ComandaOperation(draft.to_offline_payload()))
             return {"offline": True}
 
@@ -241,17 +258,338 @@ class SupabaseService(OfflineSync):
         comanda = self.comandas_repo.create(draft)
         if draft.items:
             self.items_repo.insert_many(comanda["id"], draft.items)
+        self.guardar_pagos_comanda(comanda["id"], draft.pagos)
+        self._replace_comanda_tips(comanda["id"], draft.mesero, draft.pagos)
+        return comanda
 
-        if draft.propina is not None and draft.propina > 0:
+    def guardar_pagos_comanda(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
+        pagos = list(pagos or [])
+        if not pagos:
+            return []
+        try:
+            return self.pagos_repo.replace_for_comanda(comanda_id, pagos)
+        except Exception as exc:
+            msg = str(exc).lower()
+            table_missing = (
+                "comanda_pagos" in msg
+                and ("does not exist" in msg or "relation" in msg or "schema cache" in msg or "column" in msg)
+            )
+            if table_missing:
+                if len(pagos) > 1:
+                    raise ValueError(
+                        "Falta migración SQL para pagos mixtos. Ejecuta `sql/comandas_pagos_auditoria.sql`."
+                    ) from exc
+                # Compatibilidad legacy: sin tabla comanda_pagos solo se conserva metodo principal en comandas.
+                return []
+            raise
+
+    def _replace_comanda_tips(self, comanda_id: str, mesero: str, pagos: list[dict]) -> None:
+        try:
+            self.client.table("propinas").delete().eq("comanda_id", comanda_id).execute()
+        except Exception:
+            # No bloquear guardado por limpieza de propinas legacy.
+            pass
+        for pago in pagos:
+            tip = float(pago.get("propina") or 0)
+            if tip <= 0:
+                continue
+            fuente = str(pago.get("metodo_pago") or "NO_ESPECIFICADO").strip().upper()
             propina = Propina.from_inputs(
-                monto=draft.propina,
+                monto=tip,
                 mesero_id=None,
-                mesero_nombre_snapshot=draft.mesero or "Sin nombre",
-                fuente=draft.metodo_pago.value,
-                comanda_id=comanda["id"],
+                mesero_nombre_snapshot=mesero or "Sin nombre",
+                fuente=fuente,
+                comanda_id=comanda_id,
             )
             self.propinas_repo.create(propina)
-        return comanda
+
+    def listar_historial_comandas(
+        self,
+        *,
+        fecha_inicio: date,
+        fecha_fin: date,
+        folio: str | None = None,
+        mesero: str | None = None,
+        mesa: str | None = None,
+    ) -> list[dict]:
+        if fecha_fin < fecha_inicio:
+            raise ValueError("fecha_fin debe ser >= fecha_inicio")
+        desde, _ = self._day_range(fecha_inicio)
+        _, hasta = self._day_range(fecha_fin)
+        folio_int: int | None = None
+        if folio and str(folio).strip():
+            try:
+                folio_int = int(str(folio).strip())
+            except Exception as exc:
+                raise ValueError("folio debe ser numérico") from exc
+        rows = self.comandas_repo.list_historial(
+            desde_iso=desde,
+            hasta_iso=hasta,
+            folio=folio_int,
+            mesero=(mesero or "").strip() or None,
+            mesa=(mesa or "").strip() or None,
+        )
+        ids = [str(r.get("id")) for r in rows if r.get("id")]
+        pagos_by_comanda = self._pagos_grouped(ids)
+        for row in rows:
+            cid = str(row.get("id") or "")
+            pagos = pagos_by_comanda.get(cid) or []
+            row["pagos"] = pagos
+            row["status"] = str(row.get("status") or "PAGADA").upper()
+        return rows
+
+    def get_comanda_detalle(self, comanda_id: str) -> dict:
+        comanda_id = str(comanda_id or "").strip()
+        if not comanda_id:
+            raise ValueError("comanda_id es obligatorio")
+        comanda = self.comandas_repo.get_by_id(comanda_id)
+        if not comanda:
+            raise ValueError("No existe la comanda seleccionada.")
+        items = self.items_repo.list_by_comanda(comanda_id)
+        pagos = self._pagos_grouped([comanda_id]).get(comanda_id, [])
+        tickets = self.listar_tickets_historial(comanda_id)
+        return {
+            "comanda": comanda,
+            "items": items,
+            "pagos": pagos,
+            "tickets": tickets,
+        }
+
+    def cancelar_comanda(self, comanda_id: str, *, motivo: str, cancelada_por: str) -> dict:
+        comanda_id = str(comanda_id or "").strip()
+        if not comanda_id:
+            raise ValueError("comanda_id es obligatorio")
+        motivo_txt = (motivo or "").strip()
+        if len(motivo_txt) < 4:
+            raise ValueError("motivo debe tener al menos 4 caracteres")
+        existente = self.comandas_repo.get_by_id(comanda_id)
+        if not existente:
+            raise ValueError("No existe la comanda seleccionada.")
+        if str(existente.get("status") or "").upper() == "CANCELADA":
+            return existente
+        payload = {
+            "status": "CANCELADA",
+            "cancelada_at": datetime.now(timezone.utc).isoformat(),
+            "cancelada_por": (cancelada_por or "").strip().upper() or "SISTEMA",
+            "cancelacion_motivo": motivo_txt,
+        }
+        try:
+            return self.comandas_repo.update_fields(comanda_id, payload)
+        except Exception as exc:
+            if self._is_missing_comanda_auditoria(exc):
+                raise ValueError(
+                    "Falta migración SQL para cancelación/corrección. Ejecuta `sql/comandas_pagos_auditoria.sql`."
+                ) from exc
+            raise
+
+    def corregir_comanda(
+        self,
+        comanda_id: str,
+        *,
+        motivo: str,
+        corregido_por: str,
+        total: float | None = None,
+        mesa: str | None = None,
+        mesero: str | None = None,
+        metodo_pago: str | None = None,
+        pagos: list[dict] | None = None,
+        items: list[dict] | None = None,
+    ) -> dict:
+        comanda_id = str(comanda_id or "").strip()
+        if not comanda_id:
+            raise ValueError("comanda_id es obligatorio")
+        motivo_txt = (motivo or "").strip()
+        if len(motivo_txt) < 4:
+            raise ValueError("motivo debe tener al menos 4 caracteres")
+
+        before = self.get_comanda_detalle(comanda_id)
+        base = before.get("comanda") or {}
+        if str(base.get("status") or "").upper() == "CANCELADA":
+            raise ValueError("No se puede corregir una comanda cancelada.")
+
+        changes: dict = {"status": "CORREGIDA"}
+        if total is not None:
+            total_num = float(total)
+            if total_num < 0:
+                raise ValueError("total debe ser >= 0")
+            changes["total"] = round(total_num, 2)
+        if mesa is not None:
+            changes["mesa"] = (mesa or "").strip() or None
+        if mesero is not None:
+            changes["mesero"] = (mesero or "").strip()
+        if metodo_pago is not None:
+            metodo = MetodoPago.from_raw(metodo_pago)
+            changes["metodo_pago"] = metodo.value
+
+        parsed_items: list[ComandaItem] | None = None
+        if items is not None:
+            if not items:
+                raise ValueError("debe existir al menos un producto")
+            parsed_items = []
+            total_items = 0.0
+            for raw in items:
+                item = ComandaItem.from_raw(raw)
+                if item.cantidad <= 0:
+                    raise ValueError("cantidad de item debe ser > 0")
+                if item.precio_unitario < 0:
+                    raise ValueError("precio_unitario de item debe ser >= 0")
+                item.subtotal = round(float(item.precio_unitario) * int(item.cantidad), 2)
+                total_items += item.subtotal
+                parsed_items.append(item)
+            if total is None:
+                changes["total"] = round(total_items, 2)
+
+        if pagos is not None and pagos:
+            parsed = ComandaDraft.from_raw(
+                mesero=str(changes.get("mesero") or base.get("mesero") or ""),
+                mesa=str(changes.get("mesa") or base.get("mesa") or ""),
+                metodo_pago=str(changes.get("metodo_pago") or base.get("metodo_pago") or MetodoPago.EFECTIVO.value),
+                total=float(changes.get("total") or base.get("total") or 0),
+                recibido=None,
+                cambio=None,
+                items=[],
+                pagos=pagos,
+            )
+            pagos = parsed.pagos
+            changes["metodo_pago"] = parsed.metodo_pago.value
+
+        try:
+            self.comandas_repo.update_fields(comanda_id, changes)
+        except Exception as exc:
+            if self._is_missing_comanda_auditoria(exc):
+                raise ValueError(
+                    "Falta migración SQL para corrección. Ejecuta `sql/comandas_pagos_auditoria.sql`."
+                ) from exc
+            raise
+
+        if pagos is not None:
+            self.guardar_pagos_comanda(comanda_id, pagos)
+            mesero_final = str(changes.get("mesero") or base.get("mesero") or "Sin nombre")
+            self._replace_comanda_tips(comanda_id, mesero_final, pagos)
+
+        if parsed_items is not None:
+            self.items_repo.replace_for_comanda(comanda_id, parsed_items)
+
+        after = self.get_comanda_detalle(comanda_id)
+        try:
+            self.correcciones_repo.create(
+                comanda_id=comanda_id,
+                motivo=motivo_txt,
+                before_payload=before,
+                after_payload=after,
+                corregido_por=(corregido_por or "").strip().upper() or "SISTEMA",
+            )
+        except Exception as exc:
+            if self._is_missing_table(exc, "comanda_correcciones"):
+                raise ValueError(
+                    "Falta migración SQL para auditoría de correcciones. Ejecuta `sql/comandas_pagos_auditoria.sql`."
+                ) from exc
+            raise
+        return after
+
+    def guardar_ticket_historial(
+        self,
+        *,
+        comanda_id: str,
+        ticket_text: str,
+        tipo: str,
+        created_by: str | None = None,
+        strict: bool = False,
+    ) -> dict | None:
+        if not comanda_id or not ticket_text:
+            return None
+        try:
+            current = self.ticket_historial_repo.list_by_comanda(comanda_id)
+            next_version = (max([int(r.get("version") or 0) for r in current]) + 1) if current else 1
+            return self.ticket_historial_repo.create(
+                comanda_id=comanda_id,
+                version=next_version,
+                tipo=tipo,
+                ticket_text=ticket_text,
+                created_by=created_by,
+            )
+        except Exception as exc:
+            if self._is_missing_table(exc, "ticket_historial"):
+                if strict:
+                    raise ValueError(
+                        "Falta migración SQL para historial de tickets. Ejecuta `sql/comandas_pagos_auditoria.sql`."
+                    ) from exc
+                return None
+            raise
+
+    def listar_tickets_historial(self, comanda_id: str) -> list[dict]:
+        try:
+            return self.ticket_historial_repo.list_by_comanda(comanda_id)
+        except Exception as exc:
+            if self._is_missing_table(exc, "ticket_historial"):
+                return []
+            raise
+
+    def obtener_ticket_para_reimpresion(self, comanda_id: str, *, prefer: str = "LATEST") -> dict | None:
+        rows = self.listar_tickets_historial(comanda_id)
+        if not rows:
+            return None
+        mode = (prefer or "LATEST").strip().upper()
+        if mode == "ORIGINAL":
+            return rows[0]
+        return rows[-1]
+
+    def reimprimir_ticket(self, comanda_id: str, *, prefer: str = "LATEST") -> str:
+        ticket_row = self.obtener_ticket_para_reimpresion(comanda_id, prefer=prefer)
+        if ticket_row and ticket_row.get("ticket_text"):
+            return str(ticket_row.get("ticket_text") or "")
+
+        detail = self.get_comanda_detalle(comanda_id)
+        com = detail.get("comanda") or {}
+        items = detail.get("items") or []
+        pagos = detail.get("pagos") or []
+        propina_total = round(sum(float(p.get("propina") or 0) for p in pagos), 2)
+        payload = {
+            "negocio": "Barbacoa de Miranda",
+            "folio": com.get("folio") or "N/A",
+            "fecha_hora": com.get("created_at") or "",
+            "mesa": com.get("mesa") or "",
+            "mesero": com.get("mesero") or "",
+            "metodo_pago": com.get("metodo_pago") or "",
+            "propina": propina_total,
+            "total": float(com.get("total") or 0),
+            "items": items,
+            "pagos": pagos,
+        }
+        return build_ticket_text(payload)
+
+    def _pagos_grouped(self, comanda_ids: list[str]) -> dict[str, list[dict]]:
+        grouped: dict[str, list[dict]] = {cid: [] for cid in comanda_ids}
+        if not comanda_ids:
+            return grouped
+        try:
+            pagos = self.pagos_repo.list_by_comandas(comanda_ids)
+        except Exception as exc:
+            if self._is_missing_table(exc, "comanda_pagos"):
+                return grouped
+            raise
+        for pago in pagos:
+            cid = str(pago.get("comanda_id") or "")
+            if not cid:
+                continue
+            grouped.setdefault(cid, []).append(pago)
+        return grouped
+
+    @staticmethod
+    def _is_missing_table(exc: Exception, table_name: str) -> bool:
+        msg = str(exc).lower()
+        table_token = str(table_name or "").lower()
+        return table_token in msg and (
+            "does not exist" in msg or "relation" in msg or "schema cache" in msg or "column" in msg
+        )
+
+    def _is_missing_comanda_auditoria(self, exc: Exception) -> bool:
+        cols = ("cancelada_at", "cancelada_por", "cancelacion_motivo", "status", "mesa")
+        msg = str(exc).lower()
+        for col in cols:
+            if col in msg and ("column" in msg or "schema cache" in msg):
+                return True
+        return self._is_missing_table(exc, "comanda_correcciones")
 
     # ---------------- Gastos ----------------
     def crear_gasto(
@@ -465,6 +803,73 @@ class SupabaseService(OfflineSync):
         rows = self.listar_propinas_rango(desde, hasta)
         return self._aggregate_propinas_rows(rows)
 
+    # ---------------- Ventas por método ----------------
+    def resumen_ventas_por_metodo_dia(self, fecha: date) -> dict:
+        desde, hasta = self._day_range(fecha)
+        return self._ventas_por_metodo_iso(desde, hasta)
+
+    def resumen_ventas_por_metodo_rango(self, fecha_inicio: date, fecha_fin: date) -> dict:
+        if fecha_fin < fecha_inicio:
+            raise ValueError("fecha_fin debe ser >= fecha_inicio")
+        desde, _ = self._day_range(fecha_inicio)
+        _, hasta = self._day_range(fecha_fin)
+        return self._ventas_por_metodo_iso(desde, hasta)
+
+    def _ventas_por_metodo_iso(self, desde_iso: str, hasta_iso: str) -> dict:
+        resumen = {"EFECTIVO": 0.0, "TARJETA": 0.0, "TRANSFER": 0.0, "total": 0.0}
+
+        try:
+            rows = (
+                self.client.table("comandas")
+                .select("id, total, metodo_pago, status")
+                .gte("created_at", desde_iso)
+                .lte("created_at", hasta_iso)
+                .neq("status", "CANCELADA")
+                .execute()
+            ).data or []
+        except Exception as exc:
+            if self._is_missing_comanda_auditoria(exc):
+                rows = (
+                    self.client.table("comandas")
+                    .select("id, total, metodo_pago")
+                    .gte("created_at", desde_iso)
+                    .lte("created_at", hasta_iso)
+                    .execute()
+                ).data or []
+            else:
+                raise
+
+        active_rows: list[dict] = []
+        for row in rows:
+            if str(row.get("status") or "").upper() == "CANCELADA":
+                continue
+            active_rows.append(row)
+        if not active_rows:
+            return resumen
+
+        comanda_ids = [str(r.get("id") or "") for r in active_rows if r.get("id")]
+        pagos_by_comanda = self._pagos_grouped(comanda_ids)
+
+        for row in active_rows:
+            total = round(float(row.get("total") or 0), 2)
+            resumen["total"] += total
+            cid = str(row.get("id") or "")
+            pagos = pagos_by_comanda.get(cid) or []
+            if pagos:
+                for pago in pagos:
+                    metodo = str(pago.get("metodo_pago") or "").strip().upper()
+                    monto = round(float(pago.get("monto") or 0), 2)
+                    if metodo in {"EFECTIVO", "TARJETA", "TRANSFER"}:
+                        resumen[metodo] += monto
+                continue
+            metodo = str(row.get("metodo_pago") or "").strip().upper()
+            if metodo in {"EFECTIVO", "TARJETA", "TRANSFER"}:
+                resumen[metodo] += total
+
+        for key in ("EFECTIVO", "TARJETA", "TRANSFER", "total"):
+            resumen[key] = round(float(resumen[key]), 2)
+        return resumen
+
     # ---------------- Cierre de caja ----------------
     def obtener_cierre(self, fecha: date) -> dict | None:
         return self.cierres_repo.get_by_fecha(fecha.isoformat())
@@ -477,21 +882,11 @@ class SupabaseService(OfflineSync):
         if existente:
             raise ValueError(f"Ya existe un cierre para la fecha {fecha.isoformat()}")
 
+        resumen_ventas = self.resumen_ventas_por_metodo_dia(fecha)
+        total_ventas = float(resumen_ventas.get("total") or 0)
+        ventas_efectivo = float(resumen_ventas.get("EFECTIVO") or 0)
+
         desde, hasta = self._day_range(fecha)
-
-        ventas_rows = (
-            self.client.table("comandas")
-            .select("total, metodo_pago")
-            .gte("created_at", desde)
-            .lte("created_at", hasta)
-            .execute()
-        ).data or []
-
-        total_ventas = sum(float(r.get("total") or 0) for r in ventas_rows)
-        ventas_efectivo = sum(
-            float(r.get("total") or 0) for r in ventas_rows if r.get("metodo_pago") == "EFECTIVO"
-        )
-
         gastos_rows = (
             self.client.table("gastos")
             .select("monto")
@@ -527,6 +922,12 @@ class SupabaseService(OfflineSync):
             try:
                 record.operation.apply(self)
             except Exception:
+                self._logger.warning(
+                    "offline sync failed id=%s op=%s",
+                    record.record_id,
+                    record.operation.record_op(),
+                    exc_info=True,
+                )
                 continue
             self.offline.delete_op(record.record_id)
             synced += 1
@@ -567,12 +968,14 @@ class SupabaseService(OfflineSync):
     def sync_comanda(self, payload: dict) -> None:
         draft = ComandaDraft.from_raw(
             mesero=payload.get("mesero", ""),
+            mesa=payload.get("mesa", ""),
             metodo_pago=payload.get("metodo_pago", MetodoPago.EFECTIVO.value),
             total=payload.get("total", 0),
             recibido=payload.get("recibido"),
             cambio=payload.get("cambio"),
             items=payload.get("items", []),
             propina=payload.get("propina"),
+            pagos=payload.get("pagos", []),
         )
         self._insert_comanda(draft)
 

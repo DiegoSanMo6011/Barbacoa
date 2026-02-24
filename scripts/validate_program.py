@@ -131,10 +131,13 @@ def check_required_paths() -> str:
         "app/main.py",
         "app/services/supabase_service.py",
         "app/services/corte_service.py",
+        "app/ui/historial_tickets_view.py",
+        "app/ui/payments_dialog.py",
         "app/ui/corte_view.py",
         "app/domain/models.py",
         "scripts/seed_roles.py",
         "sql/schema.sql",
+        "sql/comandas_pagos_auditoria.sql",
     ]
     missing = [path for path in required if not (ROOT_DIR / path).exists()]
     if missing:
@@ -224,6 +227,7 @@ def check_domain_models() -> str:
 
     draft = ComandaDraft.from_raw(
         mesero="Ana",
+        mesa="3",
         metodo_pago="TARJETA",
         total=230,
         recibido=None,
@@ -238,9 +242,15 @@ def check_domain_models() -> str:
             }
         ],
         propina=20,
+        pagos=[
+            {"orden": 1, "metodo_pago": "TARJETA", "monto": 100, "propina": 10},
+            {"orden": 2, "metodo_pago": "EFECTIVO", "monto": 130, "propina": 10, "recibido": 150, "cambio": 20},
+        ],
     )
     assert draft.metodo_pago == MetodoPago.TARJETA
+    assert draft.mesa == "3"
     assert len(draft.items) == 1
+    assert len(draft.pagos) == 2
     return "Modelos de dominio con validaciones correctas"
 
 
@@ -258,9 +268,11 @@ def check_ticket_builders() -> str:
             "propina": 15,
             "total": 215,
             "items": [{"nombre_snapshot": "Taco", "cantidad": 2, "subtotal": 200}],
+            "pagos": [{"metodo_pago": "EFECTIVO", "monto": 215, "propina": 15}],
         }
     )
     assert "Folio: 123" in ticket
+    assert "Pagos:" in ticket
     assert "TOTAL:" in ticket
 
     corte = build_corte_ticket_text(

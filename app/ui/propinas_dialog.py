@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 import customtkinter as ctk
 
 from services.supabase_service import SupabaseService
@@ -88,6 +88,7 @@ class PropinasEditorDialog(ctk.CTkToplevel):
         ctk.CTkLabel(meta_right, text="Selecciona un registro y cambia solo el monto.", text_color="#475569").pack(
             side="left", padx=(0, 10)
         )
+        ttk.Button(meta_right, text="Agregar propina", command=self._add_tip).pack(side="left", padx=(0, 6))
         ttk.Button(meta_right, text="Borrar propina", command=self._delete_selected).pack(side="left")
 
         table_frame = ctk.CTkFrame(self)
@@ -315,6 +316,46 @@ class PropinasEditorDialog(ctk.CTkToplevel):
             messagebox.showinfo("OK", "Propina eliminada.")
         except Exception as exc:
             messagebox.showerror("Error", f"No se pudo eliminar la propina:\n{exc}")
+
+    def _add_tip(self):
+        self._cancel_inline_edit()
+        monto_raw = simpledialog.askstring(
+            "Agregar propina",
+            "Monto de propina:",
+            parent=self,
+        )
+        if monto_raw is None:
+            return
+        try:
+            monto = float((monto_raw or "").strip())
+            if monto <= 0:
+                raise ValueError
+        except Exception:
+            messagebox.showwarning("Monto inválido", "El monto debe ser un número mayor a 0.")
+            return
+        fuente_raw = simpledialog.askstring(
+            "Agregar propina",
+            "Origen (TARJETA / EFECTIVO / TRANSFER / NO_ESPECIFICADO):",
+            parent=self,
+        )
+        fuente = str(fuente_raw or "NO_ESPECIFICADO").strip().upper() or "NO_ESPECIFICADO"
+        if fuente not in {"TARJETA", "EFECTIVO", "TRANSFER", "NO_ESPECIFICADO"}:
+            messagebox.showwarning("Origen inválido", "Origen debe ser TARJETA, EFECTIVO, TRANSFER o NO_ESPECIFICADO.")
+            return
+        try:
+            self.db.crear_propina(
+                monto=monto,
+                mesero_id=self.mesero_id,
+                mesero_nombre_snapshot=self.mesero_label or "Sin nombre",
+                fuente=fuente,
+                comanda_id=None,
+            )
+            self._load_rows()
+            if callable(self.on_saved):
+                self.on_saved()
+            messagebox.showinfo("OK", "Propina agregada.")
+        except Exception as exc:
+            messagebox.showerror("Error", f"No se pudo agregar la propina:\n{exc}")
 
     @staticmethod
     def _hora_corta(fecha_raw: object) -> str:

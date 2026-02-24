@@ -156,7 +156,95 @@ class ComandasRepository(SupabaseTable):
     table_name = "comandas"
 
     def create(self, comanda: ComandaDraft) -> dict:
-        return self._insert_one(comanda.to_record())
+        payload = comanda.to_record()
+        retry_payload = dict(payload)
+        for _ in range(3):
+            try:
+                return self._insert_one(retry_payload)
+            except Exception as exc:
+                msg = str(exc).lower()
+                if "column" not in msg and "schema cache" not in msg:
+                    raise
+                changed = False
+                if "mesa" in msg and "mesa" in retry_payload:
+                    retry_payload.pop("mesa", None)
+                    changed = True
+                if "status" in msg and "status" in retry_payload:
+                    retry_payload.pop("status", None)
+                    changed = True
+                if not changed:
+                    raise
+        return self._insert_one(retry_payload)
+
+    def list_historial(
+        self,
+        *,
+        desde_iso: str,
+        hasta_iso: str,
+        folio: int | None = None,
+        mesero: str | None = None,
+        mesa: str | None = None,
+    ) -> list[dict]:
+        columns = (
+            "id, folio, created_at, mesero, mesa, total, metodo_pago, status, "
+            "cancelada_at, cancelada_por, cancelacion_motivo"
+        )
+        query = (
+            self._table()
+            .select(columns)
+            .gte("created_at", desde_iso)
+            .lte("created_at", hasta_iso)
+            .order("created_at", desc=True)
+            .limit(600)
+        )
+        if folio is not None:
+            query = query.eq("folio", folio)
+        if mesero:
+            query = query.ilike("mesero", f"%{mesero}%")
+        if mesa:
+            query = query.ilike("mesa", f"%{mesa}%")
+        try:
+            rows = query.execute().data or []
+        except Exception as exc:
+            msg = str(exc).lower()
+            if ("column" in msg or "schema cache" in msg) and any(
+                token in msg for token in ("mesa", "cancelada_", "cancelacion_motivo", "status")
+            ):
+                if mesa:
+                    # La columna mesa no existe en esquema legacy; no se puede filtrar.
+                    return []
+                columns_legacy = "id, folio, created_at, mesero, total, metodo_pago"
+                legacy_query = (
+                    self._table()
+                    .select(columns_legacy)
+                    .gte("created_at", desde_iso)
+                    .lte("created_at", hasta_iso)
+                    .order("created_at", desc=True)
+                    .limit(600)
+                )
+                if folio is not None:
+                    legacy_query = legacy_query.eq("folio", folio)
+                if mesero:
+                    legacy_query = legacy_query.ilike("mesero", f"%{mesero}%")
+                rows = legacy_query.execute().data or []
+                for row in rows:
+                    row.setdefault("mesa", None)
+                    row.setdefault("cancelada_at", None)
+                    row.setdefault("cancelada_por", None)
+                    row.setdefault("cancelacion_motivo", None)
+                    row.setdefault("status", "PAGADA")
+            else:
+                raise
+        return rows
+
+    def get_by_id(self, comanda_id: str) -> dict | None:
+        rows = self._table().select("*").eq("id", comanda_id).limit(1).execute().data or []
+        if not rows:
+            return None
+        return rows[0]
+
+    def update_fields(self, comanda_id: str, changes: dict) -> dict:
+        return self._update_one(changes, "id", comanda_id)
 
 
 class ComandaItemsRepository(SupabaseTable):
@@ -165,6 +253,72 @@ class ComandaItemsRepository(SupabaseTable):
     def insert_many(self, comanda_id: str, items: list[ComandaItem]) -> None:
         payloads = [item.to_record(comanda_id=comanda_id) for item in items]
         self._insert_many(payloads)
+
+    def list_by_comanda(self, comanda_id: str) -> list[dict]:
+        rows = (
+            self._table()
+            .select("id, comanda_id, producto_id, nombre_snapshot, precio_unitario, cantidad, subtotal")
+            .eq("comanda_id", comanda_id)
+            .order("id")
+            .execute()
+            .data
+            or []
+        )
+        return rows
+
+    def replace_for_comanda(self, comanda_id: str, items: list[ComandaItem]) -> None:
+        self._table().delete().eq("comanda_id", comanda_id).execute()
+        self.insert_many(comanda_id, items)
+
+
+class ComandaPagosRepository(SupabaseTable):
+    table_name = "comanda_pagos"
+
+    def insert_many(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
+        payloads: list[dict] = []
+        for idx, pago in enumerate(pagos):
+            payloads.append(
+                {
+                    "comanda_id": comanda_id,
+                    "orden": int(pago.get("orden") or idx + 1),
+                    "metodo_pago": str(pago.get("metodo_pago") or "").strip().upper(),
+                    "monto": float(pago.get("monto") or 0),
+                    "recibido": pago.get("recibido"),
+                    "cambio": pago.get("cambio"),
+                    "propina": float(pago.get("propina") or 0),
+                }
+            )
+        return self._insert_many(payloads)
+
+    def list_by_comanda(self, comanda_id: str) -> list[dict]:
+        rows = (
+            self._table()
+            .select("id, comanda_id, orden, metodo_pago, monto, recibido, cambio, propina")
+            .eq("comanda_id", comanda_id)
+            .order("orden")
+            .execute()
+            .data
+            or []
+        )
+        return rows
+
+    def list_by_comandas(self, comanda_ids: list[str]) -> list[dict]:
+        if not comanda_ids:
+            return []
+        rows = (
+            self._table()
+            .select("id, comanda_id, orden, metodo_pago, monto, recibido, cambio, propina")
+            .in_("comanda_id", comanda_ids)
+            .order("orden")
+            .execute()
+            .data
+            or []
+        )
+        return rows
+
+    def replace_for_comanda(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
+        self._table().delete().eq("comanda_id", comanda_id).execute()
+        return self.insert_many(comanda_id, pagos)
 
 
 class GastosRepository(SupabaseTable):
@@ -228,6 +382,62 @@ class CierresRepository(SupabaseTable):
 
     def create(self, cierre: CierreCaja) -> dict:
         return self._insert_one(cierre.to_record())
+
+
+class ComandaCorreccionesRepository(SupabaseTable):
+    table_name = "comanda_correcciones"
+
+    def create(
+        self,
+        *,
+        comanda_id: str,
+        motivo: str,
+        before_payload: dict,
+        after_payload: dict,
+        corregido_por: str,
+    ) -> dict:
+        payload = {
+            "comanda_id": comanda_id,
+            "motivo": motivo,
+            "before_payload": before_payload,
+            "after_payload": after_payload,
+            "corregido_por": corregido_por,
+        }
+        return self._insert_one(payload)
+
+
+class TicketHistorialRepository(SupabaseTable):
+    table_name = "ticket_historial"
+
+    def list_by_comanda(self, comanda_id: str) -> list[dict]:
+        rows = (
+            self._table()
+            .select("id, comanda_id, version, tipo, ticket_text, created_at, created_by")
+            .eq("comanda_id", comanda_id)
+            .order("version")
+            .execute()
+            .data
+            or []
+        )
+        return rows
+
+    def create(
+        self,
+        *,
+        comanda_id: str,
+        version: int,
+        tipo: str,
+        ticket_text: str,
+        created_by: str | None = None,
+    ) -> dict:
+        payload = {
+            "comanda_id": comanda_id,
+            "version": int(version),
+            "tipo": str(tipo).strip().upper(),
+            "ticket_text": ticket_text,
+            "created_by": created_by,
+        }
+        return self._insert_one(payload)
 
 
 class UsuariosRepository(SupabaseTable):
