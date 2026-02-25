@@ -163,7 +163,7 @@ class CorteView(ctk.CTkToplevel):
         _row(resumen_caja, "Neto:", self.neto_var, 4)
         ctk.CTkLabel(
             resumen_caja,
-            text="Propinas en EFECTIVO: solo referencia, no afectan caja.",
+            text="Propinas en EFECTIVO y TARJETA: se descuentan del efectivo esperado.",
             text_color="#4b5563",
         ).grid(row=5, column=0, columnspan=2, padx=8, pady=(2, 8), sticky="w")
 
@@ -487,6 +487,7 @@ class CorteView(ctk.CTkToplevel):
             ventas_efectivo=ventas_efectivo,
             gastos_total=gastos_total,
             propinas_tarjeta_total=propinas_tarjeta_total,
+            propinas_efectivo_total=propinas_efectivo_total,
             caja_chica_inicial=caja_chica,
         )
 
@@ -688,6 +689,7 @@ class CorteView(ctk.CTkToplevel):
             ventas_efectivo=float(self._last.get("ventas_efectivo") or 0),
             gastos_total=float(self._last.get("total_gastos") or 0),
             propinas_tarjeta_total=float(self._last.get("total_propinas_tarjeta") or 0),
+            propinas_efectivo_total=float(self._last.get("total_propinas_efectivo") or 0),
             caja_chica_inicial=caja_chica,
         )
         diferencia = calc_diferencia(efectivo_contado, efectivo_teorico)

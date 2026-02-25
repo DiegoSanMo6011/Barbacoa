@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
+import json
 import logging
 import os
 import threading
@@ -92,7 +93,10 @@ class SupabaseService(OfflineSync):
             "bad request",
             "violates",
             "constraint",
+            "duplicate key",
             "invalid input",
+            "out of range",
+            "overflow",
             "permission denied",
             "not null",
             "foreign key",
@@ -672,7 +676,9 @@ class SupabaseService(OfflineSync):
         )
         try:
             return self.propinas_repo.create(propina)
-        except Exception:
+        except Exception as exc:
+            if not self._should_enqueue_offline(exc):
+                raise
             self.offline.enqueue(PropinaOperation(propina.to_record()))
             return {"offline": True}
 
@@ -911,17 +917,50 @@ class SupabaseService(OfflineSync):
 
         try:
             return self.cierres_repo.create(cierre)
-        except Exception:
+        except Exception as exc:
+            if not self._should_enqueue_offline(exc):
+                raise
             self.offline.enqueue(CierreOperation(cierre.to_record()))
             return {"offline": True}
 
     # ---------------- Offline sync ----------------
+    def _archive_dropped_offline_op(self, record) -> None:
+        path = os.path.join(self._base_dir, "data", "offline_dead_letter.jsonl")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        payload = {
+            "dropped_at": datetime.now(timezone.utc).isoformat(),
+            "id": record.record_id,
+            "created_at": record.created_at,
+            "op": record.operation.record_op(),
+            "payload": record.operation.payload,
+        }
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
     def sync_offline(self) -> int:
         synced = 0
         for record in self.offline.list_ops():
             try:
                 record.operation.apply(self)
-            except Exception:
+            except Exception as exc:
+                if not self._should_enqueue_offline(exc):
+                    try:
+                        self._archive_dropped_offline_op(record)
+                    except Exception:
+                        self._logger.warning(
+                            "offline op archive failed id=%s op=%s",
+                            record.record_id,
+                            record.operation.record_op(),
+                            exc_info=True,
+                        )
+                    self.offline.delete_op(record.record_id)
+                    self._logger.error(
+                        "offline op dropped (non-transient) id=%s op=%s err=%s",
+                        record.record_id,
+                        record.operation.record_op(),
+                        exc,
+                    )
+                    continue
                 self._logger.warning(
                     "offline sync failed id=%s op=%s",
                     record.record_id,
