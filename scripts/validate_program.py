@@ -203,9 +203,15 @@ def check_domain_calculos() -> str:
     assert resumen["TRANSFER"] == 20.0
     assert resumen["total"] == 180.5
 
-    efectivo = corte.calc_efectivo_teorico(ventas_efectivo=100, gastos_total=20, propinas_tarjeta_total=10, caja_chica_inicial=50)
-    assert efectivo == 120.0
-    assert corte.calc_diferencia(130, efectivo) == 10.0
+    efectivo = corte.calc_efectivo_teorico(
+        ventas_efectivo=100,
+        gastos_total=20,
+        propinas_tarjeta_total=10,
+        propinas_efectivo_total=5,
+        caja_chica_inicial=50,
+    )
+    assert efectivo == 115.0
+    assert corte.calc_diferencia(130, efectivo) == 15.0
     return "Funciones de calculo con resultados esperados"
 
 

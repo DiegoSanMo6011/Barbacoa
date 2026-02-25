@@ -20,6 +20,7 @@ def calc_efectivo_teorico(
     ventas_efectivo: float,
     gastos_total: float,
     propinas_tarjeta_total: float,
+    propinas_efectivo_total: float = 0.0,
     caja_chica_inicial: float = 0.0,
 ) -> float:
     return _round2(
@@ -27,6 +28,7 @@ def calc_efectivo_teorico(
         + float(ventas_efectivo)
         - float(gastos_total)
         - float(propinas_tarjeta_total)
+        - float(propinas_efectivo_total)
     )
 
 
