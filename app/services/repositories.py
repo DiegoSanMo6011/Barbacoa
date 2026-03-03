@@ -316,6 +316,9 @@ class ComandaPagosRepository(SupabaseTable):
         )
         return rows
 
+    def update_fields(self, pago_id: str, changes: dict) -> dict:
+        return self._update_one(changes, "id", pago_id)
+        
     def replace_for_comanda(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
         self._table().delete().eq("comanda_id", comanda_id).execute()
         return self.insert_many(comanda_id, pagos)

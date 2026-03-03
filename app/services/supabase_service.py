@@ -562,6 +562,36 @@ class SupabaseService(OfflineSync):
         }
         return build_ticket_text(payload)
 
+    def _regenerar_y_guardar_ticket(self, comanda_id: str, created_by: str = "SISTEMA") -> None:
+        try:
+            detail = self.get_comanda_detalle(comanda_id)
+            com = detail.get("comanda") or {}
+            items = detail.get("items") or []
+            pagos = detail.get("pagos") or []
+            propina_total = round(sum(float(p.get("propina") or 0) for p in pagos), 2)
+            payload = {
+                "negocio": "Barbacoa de Miranda",
+                "folio": com.get("folio") or "N/A",
+                "fecha_hora": com.get("created_at") or "",
+                "mesa": com.get("mesa") or "",
+                "mesero": com.get("mesero") or "",
+                "metodo_pago": com.get("metodo_pago") or "",
+                "propina": propina_total,
+                "total": float(com.get("total") or 0),
+                "items": items,
+                "pagos": pagos,
+            }
+            ticket_text = build_ticket_text(payload)
+            self.guardar_ticket_historial(
+                comanda_id=comanda_id,
+                ticket_text=ticket_text,
+                tipo="CORREGIDO",
+                created_by=created_by,
+                strict=False
+            )
+        except Exception as e:
+            self._logger.warning(f"Error regenerando ticket para comanda {comanda_id}: {e}")
+
     def _pagos_grouped(self, comanda_ids: list[str]) -> dict[str, list[dict]]:
         grouped: dict[str, list[dict]] = {cid: [] for cid in comanda_ids}
         if not comanda_ids:
@@ -724,7 +754,20 @@ class SupabaseService(OfflineSync):
         payload = propina.to_record()
         # fecha de actualización para ordenar y auditar cambios.
         payload["fecha"] = datetime.now(timezone.utc).isoformat()
-        return self.propinas_repo.update_fields(propina_id, payload)
+        res = self.propinas_repo.update_fields(propina_id, payload)
+        
+        comanda_id = existente.get("comanda_id")
+        if comanda_id:
+            try:
+                pagos = self.pagos_repo.list_by_comanda(comanda_id)
+                if pagos:
+                    target_pago = next((p for p in pagos if str(p.get("metodo_pago")).strip().upper() == fuente), pagos[0])
+                    self.pagos_repo.update_fields(target_pago["id"], {"propina": monto})
+                self._regenerar_y_guardar_ticket(comanda_id)
+            except Exception as e:
+                self._logger.warning(f"Error sincronizando propina actualizada a comanda_pagos: {e}")
+                
+        return res
 
     def eliminar_propina(self, propina_id: str) -> None:
         propina_id = str(propina_id or "").strip()
@@ -733,7 +776,21 @@ class SupabaseService(OfflineSync):
         existente = self.propinas_repo.get_by_id(propina_id)
         if not existente:
             raise ValueError("No existe la propina seleccionada.")
+            
+        comanda_id = existente.get("comanda_id")
+        fuente = str(existente.get("fuente") or "").strip().upper()
+        
         self.propinas_repo.delete(propina_id)
+
+        if comanda_id:
+            try:
+                pagos = self.pagos_repo.list_by_comanda(comanda_id)
+                if pagos:
+                    target_pago = next((p for p in pagos if str(p.get("metodo_pago")).strip().upper() == fuente), pagos[0])
+                    self.pagos_repo.update_fields(target_pago["id"], {"propina": 0.0})
+                self._regenerar_y_guardar_ticket(comanda_id)
+            except Exception as e:
+                self._logger.warning(f"Error sincronizando propina eliminada a comanda_pagos: {e}")
 
     def _aggregate_propinas_rows(self, rows: list[dict]) -> list[dict]:
         agg: dict[str, dict] = {}
