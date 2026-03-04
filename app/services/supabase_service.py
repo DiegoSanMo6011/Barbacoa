@@ -649,6 +649,56 @@ class SupabaseService(OfflineSync):
             self.offline.enqueue(GastoOperation(gasto.to_record()))
             return {"offline": True}
 
+    def actualizar_gasto(
+        self,
+        gasto_id: str,
+        *,
+        concepto: str | None = None,
+        categoria: str | None = None,
+        monto: float | None = None,
+        metodo_pago: str | None = None,
+    ) -> dict:
+        gasto_id = str(gasto_id or "").strip()
+        if not gasto_id:
+            raise ValueError("gasto_id es obligatorio")
+
+        changes: dict = {}
+        if concepto is not None:
+            if not str(concepto).strip():
+                raise ValueError("concepto no puede estar vacío")
+            changes["concepto"] = str(concepto).strip()
+        if categoria is not None:
+            if not str(categoria).strip():
+                raise ValueError("categoria no puede estar vacía")
+            changes["categoria"] = str(categoria).strip()
+        if monto is not None:
+            if float(monto) <= 0:
+                raise ValueError("monto debe ser > 0")
+            changes["monto"] = round(float(monto), 2)
+        if metodo_pago is not None:
+            metodo = MetodoPago.from_raw(metodo_pago)
+            changes["metodo_pago"] = metodo.value
+
+        if not changes:
+            raise ValueError("No hay cambios para actualizar.")
+
+        # Updated field to force ordering/auditing
+        changes["created_at"] = datetime.now(timezone.utc).isoformat()
+        
+        try:
+            return self.gastos_repo.update_fields(gasto_id, changes)
+        except Exception as exc:
+            raise ValueError(f"No se pudo actualizar el gasto: {exc}")
+
+    def eliminar_gasto(self, gasto_id: str) -> None:
+        gasto_id = str(gasto_id or "").strip()
+        if not gasto_id:
+            raise ValueError("gasto_id es obligatorio")
+        try:
+            self.gastos_repo.delete(gasto_id)
+        except Exception as exc:
+            raise ValueError(f"No se pudo eliminar el gasto: {exc}")
+
     def listar_gastos_dia(self, fecha: date) -> list[dict]:
         desde, hasta = self._day_range(fecha)
         return self.gastos_repo.list_by_range(desde, hasta)

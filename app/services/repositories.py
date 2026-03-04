@@ -343,6 +343,12 @@ class GastosRepository(SupabaseTable):
         )
         return rows
 
+    def update_fields(self, gasto_id: str, changes: dict) -> dict:
+        return self._update_one(changes, "id", gasto_id)
+
+    def delete(self, gasto_id: str) -> None:
+        self._delete_one("id", gasto_id)
+
 
 class PropinasRepository(SupabaseTable):
     table_name = "propinas"

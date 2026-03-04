@@ -31,6 +31,7 @@ class GastosDialog(ctk.CTkToplevel):
         self.concepto_var = tk.StringVar()
         self.nota_var = tk.StringVar()
         self.total_dia_var = tk.StringVar(value="$0.00")
+        self.selected_gasto_id: str | None = None
 
         self._build_ui()
         self._load_gastos()
@@ -77,14 +78,35 @@ class GastosDialog(ctk.CTkToplevel):
         )
         self.entry_desc.grid(row=3, column=0, columnspan=2, padx=10, pady=(0, 15), sticky="ew")
 
-        # Botón de Guardar 
+        # Contenedor para botones de acción
+        self.action_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+        self.action_frame.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="ew")
+        
+        # Botón de Guardar / Actualizar
         self.btn_save = ttk.Button(
-            form_frame,
+            self.action_frame,
             text="GUARDAR GASTO",
             style="Accent.TButton",
             command=self._guardar,
         )
-        self.btn_save.grid(row=3, column=2, padx=10, pady=(0, 15), sticky="ew")
+        self.btn_save.pack(side="left", fill="x", expand=True)
+        
+        # Botón de Cancelar Edición (oculto por defecto)
+        self.btn_cancel = ttk.Button(
+            self.action_frame,
+            text="CANCELAR",
+            command=self._cancel_edit,
+        )
+        
+        # Botón de Eliminar (oculto por defecto)
+        self.btn_delete = ctk.CTkButton(
+            self.action_frame,
+            text="ELIMINAR",
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self._eliminar,
+            width=80
+        )
 
         # 3. SECCIÓN DE HISTORIAL
         list_frame = ctk.CTkFrame(self)
@@ -102,18 +124,22 @@ class GastosDialog(ctk.CTkToplevel):
         ctk.CTkLabel(total_display, textvariable=self.total_dia_var, font=("Arial", 16, "bold"), text_color="white").pack(side="left", padx=(0, 10))
 
         # Configuración de la Tabla (Treeview)
-        cols = ("concepto", "categoria", "metodo", "monto")
+        cols = ("id", "concepto", "categoria", "metodo", "monto")
         self.tree = ttk.Treeview(list_frame, columns=cols, show="headings", height=8)
         
+        self.tree.heading("id", text="ID")
         self.tree.heading("concepto", text="Descripción / Concepto")
         self.tree.heading("categoria", text="Categoría")
         self.tree.heading("metodo", text="Método Pago")
         self.tree.heading("monto", text="Monto")
 
+        self.tree.column("id", width=0, stretch=False) # Columna ID oculta
         self.tree.column("concepto", width=300)
         self.tree.column("categoria", width=120, anchor="center")
         self.tree.column("metodo", width=120, anchor="center")
         self.tree.column("monto", width=100, anchor="e")
+        
+        self.tree.bind("<Double-1>", self._on_item_double_click)
 
         # Scrollbar para la tabla
         scroller = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
@@ -123,6 +149,69 @@ class GastosDialog(ctk.CTkToplevel):
         scroller.pack(side="right", fill="y", padx=(0,10), pady=10)
 
         bind_mousewheel(self.tree, self.tree.yview)
+
+    def _on_item_double_click(self, event):
+        item_id = self.tree.focus()
+        if not item_id:
+            return
+        
+        values = self.tree.item(item_id, "values")
+        if not values:
+            return
+            
+        # Extract values
+        gasto_id = values[0]
+        concepto = values[1]
+        categoria = values[2]
+        metodo = values[3]
+        monto_str = values[4].replace("$", "").replace(",", "")
+        
+        # Populate form
+        self.selected_gasto_id = gasto_id
+        self.concepto_var.set(concepto)
+        
+        if categoria in self.lista_categorias:
+            self.categoria_var.set(categoria)
+            self.menu_cat.set(categoria)
+            
+        if metodo in self.metodos_pago:
+            self.metodo_pago_var.set(metodo)
+            self.menu_pago.set(metodo)
+            
+        self.monto_var.set(monto_str)
+        
+        # Update UI state for editing
+        self.btn_save.configure(text="ACTUALIZAR GASTO")
+        self.btn_cancel.pack(side="left", padx=(5, 0))
+        self.btn_delete.pack(side="left", padx=(5, 0))
+
+    def _cancel_edit(self):
+        self.selected_gasto_id = None
+        self.concepto_var.set("")
+        self.monto_var.set("")
+        self.categoria_var.set(self.lista_categorias[0])
+        self.metodo_pago_var.set(self.metodos_pago[0])
+        self.menu_cat.set(self.lista_categorias[0])
+        self.menu_pago.set(self.metodos_pago[0])
+        
+        self.btn_save.configure(text="GUARDAR GASTO")
+        self.btn_cancel.pack_forget()
+        self.btn_delete.pack_forget()
+
+    def _eliminar(self):
+        if not self.selected_gasto_id:
+            return
+            
+        if not messagebox.askyesno("Confirmar Eliminación", "¿Estás seguro que deseas eliminar este gasto?"):
+            return
+            
+        try:
+            self.db.eliminar_gasto(self.selected_gasto_id)
+            messagebox.showinfo("Éxito", "Gasto eliminado correctamente.")
+            self._cancel_edit()
+            self._load_gastos()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo eliminar el gasto:\n{e}")
 
     def _guardar(self):
         # 1. Obtención de datos
@@ -143,31 +232,46 @@ class GastosDialog(ctk.CTkToplevel):
             messagebox.showerror("Error de Monto", "Ingresa un monto válido mayor a 0.")
             return
 
-        # 3. Guardado en Supabase 
+        # 3. Guardado/Actualización en Supabase 
         try:
-            #supabase_service ahora recibe metodo_pago
-            result = self.db.crear_gasto(
-                concepto=concepto,
-                categoria=categoria,
-                monto=monto,
-                metodo_pago=metodo
-            )
-
-            # 4. Feedback y Limpieza
-            if isinstance(result, dict) and result.get("offline"):
-                messagebox.showwarning(
-                    "Sin conexión",
-                    "No se pudo sincronizar con la base de datos.\n"
-                    "El gasto se guardó en cola offline para sincronizarse después."
+            if self.selected_gasto_id:
+                # Update flow
+                self.db.actualizar_gasto(
+                    gasto_id=self.selected_gasto_id,
+                    concepto=concepto,
+                    categoria=categoria,
+                    monto=monto,
+                    metodo_pago=metodo
                 )
+                messagebox.showinfo("Éxito", f"Gasto actualizado correctamente.")
+                self._cancel_edit()
             else:
-                messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
-            self.concepto_var.set("")
-            self.monto_var.set("")
+                # Insert flow
+                result = self.db.crear_gasto(
+                    concepto=concepto,
+                    categoria=categoria,
+                    monto=monto,
+                    metodo_pago=metodo
+                )
+
+                # 4. Feedback
+                if isinstance(result, dict) and result.get("offline"):
+                    messagebox.showwarning(
+                        "Sin conexión",
+                        "No se pudo sincronizar con la base de datos.\n"
+                        "El gasto se guardó en cola offline para sincronizarse después."
+                    )
+                else:
+                    messagebox.showinfo("Éxito", f"Gasto por ${monto:.2f} registrado correctamente.")
+                    
+                self.concepto_var.set("")
+                self.monto_var.set("")
+            
             self._load_gastos() # Refrescar la tabla
             
         except Exception as e:
-            messagebox.showerror("Error al registrar gasto", f"No se pudo registrar el gasto:\n{e}")
+            action = "actualizar" if self.selected_gasto_id else "registrar"
+            messagebox.showerror(f"Error al {action} gasto", f"No se pudo {action} el gasto:\n{e}")
 
     def _load_gastos(self):
         """Carga los gastos del día actual desde la base de datos."""
@@ -184,6 +288,7 @@ class GastosDialog(ctk.CTkToplevel):
                 total_acumulado += m
                 
                 self.tree.insert("", "end", values=(
+                    g.get("id", ""),
                     g.get("concepto", "N/A"),
                     g.get("categoria", "GENERAL"),
                     g.get("metodo_pago", "EFECTIVO"),
