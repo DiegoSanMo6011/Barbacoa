@@ -15,9 +15,12 @@ from domain.models import (
     ComandaDraft,
     ComandaItem,
     Gasto,
+    Insumo,
     Mesero,
+    MovimientoInventario,
     Producto,
     Propina,
+    Receta,
     Usuario,
 )
 
@@ -602,3 +605,51 @@ class UsuariosRepository(SupabaseTable):
             if rid:
                 self._table().delete().eq("id", rid).execute()
         return len(admin_rows)
+
+
+class InsumosRepository(SupabaseTable):
+    table_name = "insumos"
+
+    def list_all(self) -> list[Insumo]:
+        rows = self._table().select("*").order("nombre").execute().data or []
+        return [Insumo.from_record(r) for r in rows]
+
+    def create(self, insumo: Insumo) -> dict:
+        payload = insumo.to_record()
+        payload.pop("id", None)
+        return self._insert_one(payload)
+
+    def update_fields(self, insumo_id: str, changes: dict) -> dict:
+        return self._update_one(changes, "id", insumo_id)
+
+    def delete(self, insumo_id: str) -> None:
+        self._delete_one("id", insumo_id)
+
+
+class RecetasRepository(SupabaseTable):
+    table_name = "recetas"
+
+    def list_all(self) -> list[Receta]:
+        rows = self._table().select("*").execute().data or []
+        return [Receta.from_record(r) for r in rows]
+
+    def list_by_producto(self, producto_id: int) -> list[Receta]:
+        rows = self._table().select("*").eq("producto_id", producto_id).execute().data or []
+        return [Receta.from_record(r) for r in rows]
+
+    def replace_for_producto(self, producto_id: int, recetas: list[Receta]) -> None:
+        self._table().delete().eq("producto_id", producto_id).execute()
+        payloads = [r.to_record() for r in recetas]
+        for p in payloads:
+            p.pop("id", None)
+        if payloads:
+            self._insert_many(payloads)
+
+
+class MovimientosInventarioRepository(SupabaseTable):
+    table_name = "movimientos_inventario"
+
+    def create(self, movimiento: MovimientoInventario) -> dict:
+        payload = movimiento.to_record()
+        payload.pop("id", None)
+        return self._insert_one(payload)

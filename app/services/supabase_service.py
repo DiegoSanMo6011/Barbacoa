@@ -20,6 +20,9 @@ from domain.models import (
     MetodoPago,
     Producto,
     Propina,
+    Insumo,
+    Receta,
+    MovimientoInventario,
 )
 from domain.ticket import build_ticket_text
 from .offline_ops import (
@@ -42,6 +45,9 @@ from .repositories import (
     PropinasRepository,
     TicketHistorialRepository,
     UsuariosRepository,
+    InsumosRepository,
+    RecetasRepository,
+    MovimientosInventarioRepository,
 )
 from .settings import SUPABASE_KEY, SUPABASE_URL
 from .settings import SUPABASE_TIMEOUT_SECONDS
@@ -76,6 +82,9 @@ class SupabaseService(OfflineSync):
         self.propinas_repo = PropinasRepository(self.client)
         self.cierres_repo = CierresRepository(self.client)
         self.usuarios_repo = UsuariosRepository(self.client)
+        self.insumos_repo = InsumosRepository(self.client)
+        self.recetas_repo = RecetasRepository(self.client)
+        self.movimientos_inv_repo = MovimientosInventarioRepository(self.client)
 
         self._start_legacy_role_migration_async()
 
@@ -262,6 +271,13 @@ class SupabaseService(OfflineSync):
         comanda = self.comandas_repo.create(draft)
         if draft.items:
             self.items_repo.insert_many(comanda["id"], draft.items)
+            try:
+                # Deduct inventory for all items in the comanda
+                self.descontar_inventario_por_comanda(
+                    comanda["id"], [item.to_record() for item in draft.items]
+                )
+            except Exception as e:
+                self._logger.error(f"Error descontando inventario para comanda {comanda['id']}: {e}")
         self.guardar_pagos_comanda(comanda["id"], draft.pagos)
         self._replace_comanda_tips(comanda["id"], draft.mesero, draft.pagos)
         return comanda
@@ -1224,3 +1240,101 @@ class SupabaseService(OfflineSync):
         start_utc = start_local.astimezone(timezone.utc)
         end_utc = end_local.astimezone(timezone.utc)
         return start_utc.isoformat(), end_utc.isoformat()
+
+    # ---------------------------------------------------------
+    # INVENTARIO
+    # ---------------------------------------------------------
+
+    def listar_insumos(self) -> list[Insumo]:
+        return self.insumos_repo.list_all()
+
+    def crear_insumo(self, nombre: str, unidad: str, stock_minimo: float = 0.0) -> Insumo:
+        insumo = Insumo(
+            id=None,
+            nombre=nombre,
+            unidad=unidad,
+            stock_actual=0.0,
+            stock_minimo=stock_minimo,
+            activo=True
+        )
+        created = self.insumos_repo.create(insumo)
+        return Insumo.from_record(created)
+
+    def actualizar_insumo(self, insumo_id: str, changes: dict) -> dict:
+        return self.insumos_repo.update_fields(insumo_id, changes)
+
+    def eliminar_insumo(self, insumo_id: str) -> None:
+        self.insumos_repo.delete(insumo_id)
+
+    def obtener_recetas_producto(self, producto_id: int) -> list[Receta]:
+        return self.recetas_repo.list_by_producto(producto_id)
+
+    def guardar_recetas_producto(self, producto_id: int, recetas_data: list[dict]) -> None:
+        recetas = [Receta.from_record(r) for r in recetas_data]
+        self.recetas_repo.replace_for_producto(producto_id, recetas)
+
+    def ajustar_stock_insumo(
+        self, insumo_id: str, current_stock: float, amount_to_add: float, descripcion: str, referencia_id: str | None = None
+    ) -> None:
+        new_stock = current_stock + amount_to_add
+        if new_stock < 0:
+            new_stock = 0.0
+
+        tipo = "ENTRADA" if amount_to_add >= 0 else "SALIDA"
+        
+        self.insumos_repo.update_fields(insumo_id, {"stock_actual": new_stock})
+        
+        mov = MovimientoInventario(
+            id=None,
+            insumo_id=insumo_id,
+            tipo=tipo,
+            cantidad=abs(amount_to_add),
+            motivo=descripcion,
+            referencia_id=referencia_id
+        )
+        self.movimientos_inv_repo.create(mov)
+
+    def descontar_inventario_por_comanda(self, comanda_id: str, items_comanda: list[dict]) -> None:
+        try:
+            from domain.inventario import calc_consumo
+        except ImportError:
+            self._logger.error("No se pudo importar calc_consumo para descontar inventario.")
+            return
+
+        recetas_records = [r.to_record() for r in self.recetas_repo.list_all()]
+        consumos = calc_consumo(items_comanda, recetas_records)
+        if not consumos:
+            return
+
+        insumos_activos = {i.id: i for i in self.listar_insumos() if i.id}
+
+        for insumo_id, req_qty in consumos.items():
+            insumo = insumos_activos.get(insumo_id)
+            if not insumo:
+                continue
+
+            new_stock = insumo.stock_actual - req_qty
+            if new_stock < 0:
+                new_stock = 0.0
+
+            self.insumos_repo.update_fields(insumo_id, {"stock_actual": new_stock})
+            
+            mov = MovimientoInventario(
+                id=None,
+                insumo_id=insumo_id,
+                tipo="SALIDA",
+                cantidad=req_qty,
+                motivo="COMANDA",
+                referencia_id=comanda_id
+            )
+            self.movimientos_inv_repo.create(mov)
+
+    def obtener_alertas_stock(self) -> list[Insumo]:
+        try:
+            from domain.inventario import get_alertas_stock
+            insumos_records = [i.to_record() for i in self.listar_insumos()]
+            alertas = get_alertas_stock(insumos_records)
+            return [Insumo.from_record(a) for a in alertas]
+        except Exception as e:
+            self._logger.error(f"Error al obtener alertas de stock: {e}")
+            return []

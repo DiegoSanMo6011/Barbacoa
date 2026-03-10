@@ -24,6 +24,7 @@ from ui.reportes_view import ReportesView
 from ui.historial_tickets_view import HistorialTicketsView
 from ui.personal_dialog import PersonalDialog
 from ui.productos_dialog import ProductosDialog
+from ui.inventario_dialog import InventarioDialog
 from ui.ticket_preview import TicketPreview
 from ui.change_pin_dialog import ChangePinDialog
 from ui.payments_dialog import ask_split_payments
@@ -312,6 +313,7 @@ class POSApp(tk.Tk):
         self._add_more_menu_item("propinas", "Propinas", self._open_propinas)
         self._add_more_menu_item("personal", "Personal", self._open_personal)
         self._add_more_menu_item("productos", "Productos", self._open_productos)
+        self._add_more_menu_item("inventario", "📦 Inventario", self._open_inventario)
         self._add_more_menu_item("corte", "Corte", self._open_corte)
         self._add_more_menu_item("reportes", "Reportes", self._open_reportes)
         self._add_more_menu_item("historial", "Historial tickets", self._open_historial_tickets)
@@ -605,6 +607,7 @@ class POSApp(tk.Tk):
             "historial": self.auth.can(Permission.COMANDAS),
             "personal": self.auth.can(Permission.PERSONAL),
             "productos": self.auth.can(Permission.PRODUCTOS),
+            "inventario": self.auth.can(Permission.PRODUCTOS), # We use PRODUCTOS permission for this
         }
         for key, enabled in menu_permissions.items():
             idx = self._more_menu_indexes.get(key)
@@ -1617,6 +1620,15 @@ class POSApp(tk.Tk):
             lambda: ProductosDialog(self, self.db),
             on_close=self._reload_productos_catalogo,
         )
+
+    def _open_inventario(self):
+        if not self._ensure_permission(Permission.PRODUCTOS, "abrir Inventario"):
+            return
+        self._open_admin_dialog(
+            "inventario",
+            lambda: InventarioDialog(self, self.db),
+        )
+
 
     def _open_change_pin(self):
         role = self.auth.current_role()

@@ -484,3 +484,100 @@ class CierreCaja(RecordSerializable):
             "diferencia_efectivo": _round2(self.diferencia_efectivo),
             "notas": _clean_text(self.notas) if isinstance(self.notas, str) and _clean_text(self.notas) else None,
         }
+
+
+@dataclass(slots=True)
+class Insumo(RecordSerializable):
+    id: str | None
+    nombre: str
+    unidad: str
+    stock_actual: float = 0.0
+    stock_minimo: float = 0.0
+    activo: bool = True
+
+    @classmethod
+    def from_record(cls, data: dict) -> "Insumo":
+        return cls(
+            id=data.get("id"),
+            nombre=data.get("nombre") or "",
+            unidad=data.get("unidad") or "pz",
+            stock_actual=float(data.get("stock_actual") or 0.0),
+            stock_minimo=float(data.get("stock_minimo") or 0.0),
+            activo=bool(data.get("activo", True)),
+        )
+
+    def to_record(self) -> dict:
+        record = {
+            "nombre": _clean_text(self.nombre),
+            "unidad": _clean_text(self.unidad) or "pz",
+            "stock_actual": float(self.stock_actual),
+            "stock_minimo": float(self.stock_minimo),
+            "activo": bool(self.activo),
+        }
+        if self.id:
+            record["id"] = self.id
+        return record
+
+
+@dataclass(slots=True)
+class Receta(RecordSerializable):
+    id: str | None
+    producto_id: int
+    insumo_id: str
+    cantidad: float
+
+    @classmethod
+    def from_record(cls, data: dict) -> "Receta":
+        return cls(
+            id=data.get("id"),
+            producto_id=int(data["producto_id"]),
+            insumo_id=str(data["insumo_id"]),
+            cantidad=float(data.get("cantidad") or 0.0),
+        )
+
+    def to_record(self) -> dict:
+        record = {
+            "producto_id": int(self.producto_id),
+            "insumo_id": str(self.insumo_id),
+            "cantidad": float(self.cantidad),
+        }
+        if self.id:
+            record["id"] = self.id
+        return record
+
+
+@dataclass(slots=True)
+class MovimientoInventario(RecordSerializable):
+    id: str | None
+    insumo_id: str
+    tipo: str  # ENTRADA o SALIDA
+    cantidad: float
+    motivo: str | None
+    referencia_id: str | None
+    created_at: str | None = None
+
+    @classmethod
+    def from_record(cls, data: dict) -> "MovimientoInventario":
+        return cls(
+            id=data.get("id"),
+            insumo_id=str(data["insumo_id"]),
+            tipo=str(data.get("tipo") or "SALIDA").upper(),
+            cantidad=float(data.get("cantidad") or 0.0),
+            motivo=data.get("motivo"),
+            referencia_id=data.get("referencia_id"),
+            created_at=data.get("created_at"),
+        )
+
+    def to_record(self) -> dict:
+        record = {
+            "insumo_id": str(self.insumo_id),
+            "tipo": str(self.tipo).upper(),
+            "cantidad": float(self.cantidad),
+            "motivo": _clean_text(self.motivo) if self.motivo else None,
+            "referencia_id": _clean_text(self.referencia_id) if self.referencia_id else None,
+        }
+        if self.id:
+            record["id"] = self.id
+        if self.created_at:
+            record["created_at"] = self.created_at
+        return record
