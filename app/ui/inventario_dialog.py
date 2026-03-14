@@ -105,18 +105,31 @@ class InventarioDialog(ctk.CTkToplevel):
         self.mov_insumo_var = tk.StringVar()
         self.mov_cantidad_var = tk.StringVar(value="0")
         self.mov_motivo_var = tk.StringVar()
+        self.mov_tipo_var = tk.StringVar(value="entrada")
+        self.mov_unidad_var = tk.StringVar()
 
         ctk.CTkLabel(form, text="Insumo:").grid(row=0, column=0, padx=6, pady=6)
         self.mov_insumo_cb = ttk.Combobox(form, textvariable=self.mov_insumo_var, state="readonly", width=30)
         self.mov_insumo_cb.grid(row=0, column=1, padx=6, pady=6)
+        self.mov_insumo_cb.bind("<<ComboboxSelected>>", self._on_insumo_mov_selected)
 
-        ctk.CTkLabel(form, text="Cantidad (positiva=entrada, negativa=salida):").grid(row=0, column=2, padx=6, pady=6)
-        ctk.CTkEntry(form, textvariable=self.mov_cantidad_var, width=100).grid(row=0, column=3, padx=6, pady=6)
+        # Radio buttons for clear Entrada/Salida
+        radios_frame = ctk.CTkFrame(form, fg_color="transparent")
+        radios_frame.grid(row=0, column=2, padx=6, pady=6)
+        ctk.CTkRadioButton(radios_frame, text="Entrada (+)", variable=self.mov_tipo_var, value="entrada").pack(side="left", padx=4)
+        ctk.CTkRadioButton(radios_frame, text="Salida (-)", variable=self.mov_tipo_var, value="salida").pack(side="left", padx=4)
+
+        ctk.CTkLabel(form, text="Cantidad:").grid(row=0, column=3, padx=6, pady=6)
+        self.mov_cantidad_entry = ctk.CTkEntry(form, textvariable=self.mov_cantidad_var, width=80)
+        self.mov_cantidad_entry.grid(row=0, column=4, padx=6, pady=6)
+        
+        self.mov_unidad_cb = ttk.Combobox(form, textvariable=self.mov_unidad_var, state="readonly", width=8)
+        self.mov_unidad_cb.grid(row=0, column=5, padx=6, pady=6)
 
         ctk.CTkLabel(form, text="Motivo/Nota:").grid(row=1, column=0, padx=6, pady=6)
         ctk.CTkEntry(form, textvariable=self.mov_motivo_var, width=300).grid(row=1, column=1, columnspan=3, sticky="w", padx=6, pady=6)
 
-        ttk.Button(form, text="Ajustar Stock", style="Accent.TButton", command=self._ajustar_stock).grid(row=1, column=4, padx=12, pady=6)
+        ttk.Button(form, text="Ajustar Stock", style="Accent.TButton", command=self._ajustar_stock).grid(row=1, column=5, padx=12, pady=6)
 
     # --- TAB RECETAS ---
     def _build_tab_recetas(self):
@@ -327,16 +340,53 @@ class InventarioDialog(ctk.CTkToplevel):
         insumo = self.insumos[sel_idx]
         
         try:
-            cant = float(self.mov_cantidad_var.get())
-            if cant == 0: return
+            cant_input = float(self.mov_cantidad_var.get())
+            if cant_input <= 0:
+                return messagebox.showwarning("Atención", "La cantidad debe ser mayor a 0. Usa las opciones de Entrada o Salida para definir de qué tipo es.")
         except Exception:
             return messagebox.showwarning("Atención", "Cantidad inválida.")
+            
+        unidad_seleccionada = self.mov_unidad_var.get()
+        if not unidad_seleccionada:
+            return messagebox.showwarning("Atención", "Selecciona una unidad.")
+            
+        # 1. Standard mathematically known conversions
+        is_standard = False
+        raw_cant = cant_input
+        if insumo.unidad == "kg" and unidad_seleccionada == "g":
+            raw_cant = cant_input / 1000.0
+            is_standard = True
+        elif insumo.unidad == "L" and unidad_seleccionada == "ml":
+            raw_cant = cant_input / 1000.0
+            is_standard = True
+        elif insumo.unidad == "g" and unidad_seleccionada == "kg":
+            raw_cant = cant_input * 1000.0
+            is_standard = True
+        elif insumo.unidad == unidad_seleccionada:
+            is_standard = True
+            
+        # 2. Arbitrary custom conversions (e.g. pz -> kg)
+        if not is_standard:
+            import tkinter.simpledialog as sd
+            msg = f"Este insumo está inventariado en '{insumo.unidad}', pero indicaste '{unidad_seleccionada}'.\n\n¿A cuánto equivale 1 {unidad_seleccionada} en {insumo.unidad} internamente?"
+            peso_unitario_str = sd.askstring("Equivalencia", msg, parent=self)
+            if not peso_unitario_str: 
+                return # Cancelled
+            try:
+                peso_unitario = float(peso_unitario_str)
+                if peso_unitario <= 0: raise ValueError
+            except ValueError:
+                return messagebox.showwarning("Error", "Equivalencia inválida. Debe ser un número mayor a 0.")
+            raw_cant = cant_input * peso_unitario
+
+        if self.mov_tipo_var.get() == "salida":
+            raw_cant = -raw_cant
             
         try:
             self.db.ajustar_stock_insumo(
                 insumo_id=str(insumo.id),
                 current_stock=insumo.stock_actual,
-                amount_to_add=cant,
+                amount_to_add=raw_cant,
                 descripcion=self.mov_motivo_var.get() or "AJUSTE MANUAL"
             )
             self._load_data()
@@ -345,6 +395,17 @@ class InventarioDialog(ctk.CTkToplevel):
             self.tabview.set("Insumos y Alertas")
         except Exception as e:
             messagebox.showerror("Error", str(e))
+
+    def _on_insumo_mov_selected(self, _e=None):
+        sel_idx = self.mov_insumo_cb.current()
+        if sel_idx < 0: return
+        insumo = self.insumos[sel_idx]
+        
+        # Allow all units universally to support custom mappings
+        opciones_unidad = ["kg", "g", "L", "ml", "pz"]
+            
+        self.mov_unidad_cb.configure(values=opciones_unidad)
+        self.mov_unidad_var.set(insumo.unidad) # Default to the base unit
 
     def _on_insumo_receta_selected(self, _e=None):
         sel_idx = self.rec_insumo_cb.current()
