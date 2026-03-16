@@ -1,0 +1,76 @@
+services:
+  edge:
+    build:
+      context: ../lite-edge
+      dockerfile: Dockerfile
+    env_file:
+      - ../lite-edge/.env
+    expose:
+      - "8000"
+    restart: unless-stopped
+    networks:
+      - pos_net
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/status', timeout=3)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  pwa:
+    build:
+      context: ../lite-pwa
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    user: "0:0"
+    command: ["/bin/sh", "-c", "rm -rf /out/* && cp -r /opt/dist/* /out/ && sleep infinity"]
+    volumes:
+      - pwa_dist:/out
+    restart: unless-stopped
+    networks:
+      - pos_net
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /opt/dist/index.html ] || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    image: nginx:1.27-alpine
+    depends_on:
+      edge:
+        condition: service_healthy
+      pwa:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - pwa_dist:/usr/share/nginx/html:ro
+    restart: unless-stopped
+    networks:
+      - pos_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q -O /dev/null https://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  pos_net:
+    driver: bridge
+    name: pos_net
+
+volumes:
+  pwa_dist:
+    name: pos_lite_pwa_dist
