@@ -40,39 +40,21 @@ scripts/
   run_pos.sh              # Autostart local
 ```
 
-## Configuración
+## Configuración Local y Ejecución (Desarrollo)
 
-1) Crear entorno virtual
+1) Inicializar el entorno e instalar todas las dependencias (Edge y PWA)
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+./scripts/bootstrap.sh
 ```
+*(Si es tu primera vez, copia los archivos `.env.example` localizados en `pos-edge/.env` y `pos-pwa/.env` y reemplaza los valores antes de levantar el servidor).*
 
-2) Instalar dependencias
+2) Ejecutar la aplicación (Backend + Frontend)
 ```bash
-pip install -r requirements.txt
+./scripts/dev.sh
 ```
-
-3) Variables de entorno
-```bash
-cp .env.example .env
-```
-Editar `.env` con credenciales Supabase:
-```env
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-BARBACOA_UI_SCALE=1.1
-BARBACOA_UI_START_MODE=maximized
-BARBACOA_UI_OPEN_COMANDAS=collapsed
-BARBACOA_SUPABASE_TIMEOUT_SECONDS=20
-BARBACOA_MESEROS_REFRESH_TTL_SECONDS=45
-BARBACOA_TIMEZONE=America/Mexico_City
-```
-
-4) Ejecutar
-```bash
-python app/main.py
-```
+La aplicación levantará los siguientes servicios locales:
+- **PWA (Punto de Venta / Administrador):** `http://localhost:5173`
+- **Edge API (Documentación):** `http://localhost:8000/docs`
 
 ## Validador rapido
 
