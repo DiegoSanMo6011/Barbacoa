@@ -7,12 +7,12 @@ Esta guía instala AutoNoma POS Lite en red local, con HTTPS y sin exponer servi
 - Ubuntu/Debian (laptop o Raspberry Pi OS)
 - Docker + Docker Compose plugin
 - `openssl`
-- Archivo `lite-edge/.env` configurado con valores reales
+- Archivo `pos-edge/.env` configurado con valores reales
 
 ## 2) Preparar variables seguras
 
 ```bash
-cd lite-edge
+cd pos-edge
 cp .env.example .env
 ```
 
@@ -26,7 +26,7 @@ Valores críticos:
 
 Recomendado:
 ```bash
-chmod 600 lite-edge/.env
+chmod 600 pos-edge/.env
 ```
 
 ## 3) Generar certificados TLS locales

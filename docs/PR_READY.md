@@ -15,10 +15,10 @@ git checkout -b feat/pos-lite-bootstrap-hardening
 git add docs/PRD_POS_LITE.md docs/PR_READY.md README.md
 git commit -m "docs: add POS Lite PRD and migration links"
 
-git add lite-pwa/package.json lite-pwa/src/components/CobrarModal.tsx lite-pwa/src/components/Nav.tsx lite-pwa/src/db/localDB.ts lite-pwa/src/sync/catalogoSync.ts lite-pwa/src/sync/syncQueue.ts
+git add pos-pwa/package.json pos-pwa/src/components/CobrarModal.tsx pos-pwa/src/components/Nav.tsx pos-pwa/src/db/localDB.ts pos-pwa/src/sync/catalogoSync.ts pos-pwa/src/sync/syncQueue.ts
 git commit -m "fix(pwa): harden offline sync and connectivity status"
 
-git add lite-edge/routers/comandas.py sql/01_schema_lite.sql sql/02_rls_policies.sql sql/03_rpcs.sql sql/seed_demo_cafe.sql
+git add pos-edge/routers/comandas.py sql/01_schema_lite.sql sql/02_rls_policies.sql sql/03_rpcs.sql sql/seed_demo_cafe.sql
 git commit -m "feat(sql): reinforce multitenant integrity and rpc guards"
 
 git add scripts/bootstrap.sh scripts/dev.sh
@@ -64,6 +64,6 @@ git commit -m "chore(devx): add bootstrap and dev scripts"
 - `npm install` para tomar `nanoid`.
 
 ## Validación ejecutada
-- `python3 -m compileall lite-edge` ✅
+- `python3 -m compileall pos-edge` ✅
 - Build de PWA pendiente de dependencias en entorno actual (`tsc` no disponible en PATH sin `npm install` local completo).
 ```

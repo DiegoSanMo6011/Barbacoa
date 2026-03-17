@@ -1,10 +1,10 @@
 services:
   edge:
     build:
-      context: ../lite-edge
+      context: ../pos-edge
       dockerfile: Dockerfile
     env_file:
-      - ../lite-edge/.env
+      - ../pos-edge/.env
     expose:
       - "8000"
     restart: unless-stopped
@@ -23,7 +23,7 @@ services:
 
   pwa:
     build:
-      context: ../lite-pwa
+      context: ../pos-pwa
       dockerfile: Dockerfile
       args:
         VITE_API_BASE: /api

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EDGE_DIR="${ROOT_DIR}/lite-edge"
-PWA_DIR="${ROOT_DIR}/lite-pwa"
+EDGE_DIR="${ROOT_DIR}/pos-edge"
+PWA_DIR="${ROOT_DIR}/pos-pwa"
 
 WITH_DB=0
 WITH_SEED=0
@@ -37,7 +37,7 @@ warn_if_placeholder_env() {
   [[ -f "${edge_env}" ]] || return 0
   if grep -Eq "tu-proyecto\.supabase\.co|tu-service-role-key|uuid-del-tenant-aqui" "${edge_env}"; then
     cat <<'EOF'
-⚠️  Detecté placeholders en lite-edge/.env.
+⚠️  Detecté placeholders en pos-edge/.env.
     Reemplaza SUPABASE_URL, SUPABASE_SERVICE_KEY y TENANT_ID con valores reales.
 EOF
   fi

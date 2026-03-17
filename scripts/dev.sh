@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EDGE_DIR="${ROOT_DIR}/lite-edge"
-PWA_DIR="${ROOT_DIR}/lite-pwa"
+EDGE_DIR="${ROOT_DIR}/pos-edge"
+PWA_DIR="${ROOT_DIR}/pos-pwa"
 
 EDGE_PORT="${EDGE_PORT:-8000}"
 PWA_PORT="${PWA_PORT:-5173}"

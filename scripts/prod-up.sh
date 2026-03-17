@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${ROOT_DIR}/deploy/docker-compose.prod.yml"
 SSL_DIR="${ROOT_DIR}/deploy/nginx/ssl"
-EDGE_ENV="${ROOT_DIR}/lite-edge/.env"
+EDGE_ENV="${ROOT_DIR}/pos-edge/.env"
 
 require_cmd() {
   local cmd="$1"

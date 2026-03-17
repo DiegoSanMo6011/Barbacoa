@@ -17,7 +17,7 @@ Variables opcionales:
   BACKUP_PASSPHRASE=clave-para-cifrado
 
 Incluye:
-  lite-edge/.env
+  pos-edge/.env
   deploy/docker-compose.prod.yml
   deploy/nginx/conf.d
   deploy/nginx/nginx.conf
@@ -33,7 +33,7 @@ fi
 mkdir -p "${OUT_DIR}"
 
 entries=()
-[[ -f "${ROOT_DIR}/lite-edge/.env" ]] && entries+=("lite-edge/.env")
+[[ -f "${ROOT_DIR}/pos-edge/.env" ]] && entries+=("pos-edge/.env")
 [[ -f "${ROOT_DIR}/deploy/docker-compose.prod.yml" ]] && entries+=("deploy/docker-compose.prod.yml")
 [[ -d "${ROOT_DIR}/deploy/nginx/conf.d" ]] && entries+=("deploy/nginx/conf.d")
 [[ -f "${ROOT_DIR}/deploy/nginx/nginx.conf" ]] && entries+=("deploy/nginx/nginx.conf")

@@ -27,8 +27,8 @@ Objetivo principal: cobrar en menos de 15 segundos por ticket en hardware rehabi
 - Aislamiento multitenant estricto por `tenant_id`.
 
 ## 5) Arquitectura propuesta
-- `lite-pwa/`: React + TypeScript + Dexie (IndexedDB) + Zustand.
-- `lite-edge/`: FastAPI como backend local para simplificar seguridad y contratos.
+- `pos-pwa/`: React + TypeScript + Dexie (IndexedDB) + Zustand.
+- `pos-edge/`: FastAPI como backend local para simplificar seguridad y contratos.
 - `sql/`: migraciones y RPCs en Supabase (PostgreSQL).
 
 Flujo:
@@ -101,12 +101,12 @@ pos_lite/
 │   ├── 02_rls_policies.sql
 │   ├── 03_rpcs.sql
 │   └── seed_demo_cafe.sql
-├── lite-edge/
+├── pos-edge/
 │   ├── main.py
 │   ├── core/
 │   ├── models/
 │   └── routers/
-├── lite-pwa/
+├── pos-pwa/
 │   ├── src/db/
 │   ├── src/store/
 │   ├── src/sync/
@@ -120,4 +120,4 @@ pos_lite/
 - Multitenant: base única compartida con POS Full.
 - Modificadores: esquema grupos + opciones + `precio_delta` (aprobado para cafetería).
 - Offline local: Dexie/IndexedDB (más simple que wa-sqlite para MVP).
-- Backend local: mantener `lite-edge` (evita exponer service key en cliente y simplifica evolución).
+- Backend local: mantener `pos-edge` (evita exponer service key en cliente y simplifica evolución).

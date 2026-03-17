@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-https://localhost}"
 ROL="${ROL:-CAJERO}"
 PIN="${PIN:-}"
-ENV_FILE="${ENV_FILE:-lite-edge/.env}"
+ENV_FILE="${ENV_FILE:-pos-edge/.env}"
 
 load_pin_from_env_file() {
   local key="$1"

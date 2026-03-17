@@ -40,7 +40,7 @@ VALUES ('UUID-DEL-TENANT', 'Encargado', true);
 # En el servidor local del cliente:
 cd autonoma-edge   # El repo POS_AUTONOMA
 cp .env.example .env
-# Copiar las mismas credenciales que usaba el .env de lite-edge
+# Copiar las mismas credenciales que usaba el .env de pos-edge
 uvicorn main:app --reload --port 8000
 ```
 

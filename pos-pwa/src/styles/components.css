@@ -1,0 +1,345 @@
+/* ============================================================
+   Componentes base reutilizables
+   ============================================================ */
+
+/* ---- Botones ---- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-height: var(--btn-height);
+    padding: 0 var(--space-5);
+    border-radius: var(--radius);
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all var(--transition);
+    white-space: nowrap;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn:active {
+    transform: scale(0.97);
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.btn-primary {
+    background: var(--color-brand);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: var(--color-brand-dark);
+}
+
+.btn-secondary {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+    background: var(--color-border);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--color-text-muted);
+}
+
+.btn-ghost:hover {
+    background: var(--color-surface-2);
+    color: var(--color-text);
+}
+
+.btn-danger {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+}
+
+.btn-danger:hover {
+    background: var(--color-danger);
+    color: #fff;
+}
+
+.btn-success {
+    background: var(--color-success);
+    color: #0f172a;
+}
+
+.btn-success:hover {
+    filter: brightness(1.1);
+}
+
+.btn-warning {
+    background: var(--color-warning);
+    color: #422006;
+}
+
+.btn-warning:hover {
+    filter: brightness(1.05);
+}
+
+.btn-lg {
+    min-height: var(--btn-height-lg);
+    font-size: 1.125rem;
+    border-radius: var(--radius-lg);
+    padding: 0 var(--space-8);
+}
+
+.btn-sm {
+    min-height: 36px;
+    padding: 0 var(--space-3);
+    font-size: 0.875rem;
+}
+
+.btn-icon {
+    padding: 0;
+    width: var(--btn-height);
+    min-height: var(--btn-height);
+}
+
+/* ---- Cards ---- */
+.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.card-flat {
+    background: var(--color-surface);
+    border-radius: var(--radius);
+    padding: var(--space-4);
+}
+
+/* ---- Badges de método de pago ---- */
+.badge-metodo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.badge-EFECTIVO {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+
+.badge-TARJETA {
+    background: var(--color-info-bg);
+    color: var(--color-info);
+}
+
+.badge-TRANSFER {
+    background: rgba(168, 85, 247, .15);
+    color: #a855f7;
+}
+
+.badge-MIXTO {
+    background: var(--color-brand-bg);
+    color: var(--color-brand);
+}
+
+.badge-NO_ESPECIFICADO {
+    background: rgba(148, 163, 184, .15);
+    color: var(--color-text-muted);
+}
+
+/* ---- Status badges ---- */
+.badge-status-PAGADA {
+    color: var(--color-success);
+}
+
+.badge-status-CANCELADA {
+    color: var(--color-danger);
+}
+
+.badge-status-CORREGIDA {
+    color: var(--color-warning);
+}
+
+/* ---- Inputs ---- */
+.input {
+    width: 100%;
+    background: var(--color-surface-2);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius);
+    color: var(--color-text);
+    font-size: 1rem;
+    padding: 0 var(--space-4);
+    height: var(--btn-height);
+    transition: border-color var(--transition);
+    outline: none;
+}
+
+.input:focus {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px var(--color-brand-bg);
+}
+
+.input::placeholder {
+    color: var(--color-text-faint);
+}
+
+/* ---- Divisores ---- */
+.divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: var(--space-4) 0;
+}
+
+/* ---- Spinner ---- */
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid var(--color-border);
+    border-top-color: var(--color-brand);
+    border-radius: 50%;
+    animation: spin 700ms linear infinite;
+}
+
+/* ---- Skeleton placeholder ---- */
+.skeleton {
+    background: linear-gradient(90deg, var(--color-surface) 25%, var(--color-surface-2) 50%, var(--color-surface) 75%);
+    background-size: 200% 100%;
+    animation: skeleton 1.5s ease infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ---- Toast notifications ---- */
+.toast-container {
+    position: fixed;
+    bottom: var(--space-6);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    pointer-events: none;
+    width: min(400px, 90vw);
+}
+
+.toast {
+    padding: var(--space-3) var(--space-5);
+    border-radius: var(--radius);
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 200ms ease forwards;
+    pointer-events: all;
+}
+
+.toast-success {
+    background: var(--color-success);
+    color: #052e16;
+}
+
+.toast-error {
+    background: var(--color-danger);
+    color: #fff;
+}
+
+.toast-warning {
+    background: var(--color-warning);
+    color: #422006;
+}
+
+.toast-info {
+    background: var(--color-info);
+    color: #fff;
+}
+
+/* ---- Modal overlay ---- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: flex-end;
+    /* Bottom sheet en móvil */
+    justify-content: center;
+    padding: 0;
+    animation: fadeIn 150ms ease forwards;
+}
+
+@media (min-width: 640px) {
+    .modal-overlay {
+        align-items: center;
+        padding: var(--space-6);
+    }
+}
+
+.modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: var(--space-6);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90dvh;
+    overflow-y: auto;
+    animation: slideUp 200ms ease forwards;
+}
+
+@media (min-width: 640px) {
+    .modal {
+        border-radius: var(--radius-xl);
+        padding: var(--space-8);
+    }
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: var(--space-5);
+}
+
+/* ---- Número de precio ---- */
+.price {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.price-lg {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+/* ---- Empty state ---- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-10);
+    color: var(--color-text-muted);
+    text-align: center;
+}
