@@ -17,18 +17,18 @@ router = APIRouter()
 @router.get("/insumos", response_model=list[InsumoOut])
 def listar_insumos(user=Depends(require_roles("CAJERO", "ADMIN"))):
     sb = get_supabase()
-    res = sb.table("insumos").select("*").eq("tenant_id", settings.TENANT_ID).eq("activo", True).order("nombre").execute()
+    res = sb.table("insumos").select("*").eq("activo", True).order("nombre").execute()
     return res.data or []
 
 @router.post("/insumos", response_model=InsumoOut, status_code=201)
 def crear_insumo(insumo: InsumoCreate, request: Request, user=Depends(require_roles("ADMIN"))):
     sb = get_supabase()
     payload = insumo.model_dump()
-    payload["tenant_id"] = settings.TENANT_ID
+
     payload["nombre"] = payload["nombre"].strip()
     
     # Check duplicate
-    existing = sb.table("insumos").select("id").eq("tenant_id", settings.TENANT_ID).eq("nombre", payload["nombre"]).eq("activo", True).execute()
+    existing = sb.table("insumos").select("id").eq("nombre", payload["nombre"]).eq("activo", True).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail=f"El insumo '{payload['nombre']}' ya existe.")
         
@@ -44,10 +44,10 @@ def actualizar_insumo(insumo_id: str, changes: InsumoUpdate, request: Request, u
     sb = get_supabase()
     payload = {k: v for k, v in changes.model_dump().items() if v is not None}
     if not payload:
-        res = sb.table("insumos").select("*").eq("id", insumo_id).eq("tenant_id", settings.TENANT_ID).execute()
+        res = sb.table("insumos").select("*").eq("id", insumo_id).execute()
         return res.data[0] if res.data else {}
 
-    res = sb.table("insumos").update(payload).eq("id", insumo_id).eq("tenant_id", settings.TENANT_ID).execute()
+    res = sb.table("insumos").update(payload).eq("id", insumo_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Insumo no encontrado")
         
@@ -58,11 +58,11 @@ def actualizar_insumo(insumo_id: str, changes: InsumoUpdate, request: Request, u
 def eliminar_insumo(insumo_id: str, request: Request, user=Depends(require_roles("ADMIN"))):
     sb = get_supabase()
     # Check if used in active recipes
-    used = sb.table("recetas").select("id").eq("insumo_id", insumo_id).eq("tenant_id", settings.TENANT_ID).limit(1).execute()
+    used = sb.table("recetas").select("id").eq("insumo_id", insumo_id).limit(1).execute()
     if used.data:
         raise HTTPException(status_code=400, detail="No se puede eliminar insumo porque es parte de una receta. Primero elimínalo de las recetas.")
         
-    sb.table("insumos").update({"activo": False}).eq("id", insumo_id).eq("tenant_id", settings.TENANT_ID).execute()
+    sb.table("insumos").update({"activo": False}).eq("id", insumo_id).execute()
     log_audit_event("inventario.insumo_eliminado", request=request, user=user, metadata={"insumo_id": insumo_id})
 
 # =========================================================
@@ -73,21 +73,33 @@ def registrar_movimiento(mov: MovimientoInventarioCreate, request: Request, user
     sb = get_supabase()
     # Deduplication and locking relies directly on RPC for atomic updates
     try:
-        res = sb.rpc("registrar_movimiento_inventario_v2", {
-            "p_tenant_id": settings.TENANT_ID,
-            "p_insumo_id": mov.insumo_id,
-            "p_tipo": mov.tipo,
-            "p_cantidad": mov.cantidad,
-            "p_motivo": mov.motivo,
-            "p_referencia_id": mov.referencia_id
-        }).execute()
+        # Obtener stock actual
+        insumo = sb.table("insumos").select("stock_actual").eq("id", mov.insumo_id).execute()
+        if not insumo.data:
+            raise HTTPException(status_code=404, detail="Insumo no encontrado")
+            
+        stock_actual = float(insumo.data[0]["stock_actual"])
+        nuevo_stock = stock_actual + mov.cantidad if mov.tipo == "ENTRADA" else stock_actual - mov.cantidad
+        if nuevo_stock < 0: nuevo_stock = 0
         
-        # Format the response to match the MovimientoInventarioOut Pydantic model
-        if res.data and isinstance(res.data, list) and len(res.data) > 0:
+        # Insertar movimiento
+        mov_payload = {
+            "insumo_id": mov.insumo_id,
+            "tipo": mov.tipo,
+            "cantidad": mov.cantidad,
+            "motivo": mov.motivo,
+            "referencia_id": mov.referencia_id
+        }
+        res_mov = sb.table("movimientos_inventario").insert(mov_payload).execute()
+        
+        # Actualizar stock
+        sb.table("insumos").update({"stock_actual": nuevo_stock}).eq("id", mov.insumo_id).execute()
+        
+        if res_mov.data:
             log_audit_event("inventario.movimiento_registrado", request=request, user=user, metadata={"insumo_id": mov.insumo_id, "tipo": mov.tipo, "cantidad": mov.cantidad})
-            return res.data[0]
+            return res_mov.data[0]
         else:
-            raise HTTPException(status_code=500, detail="El RPC no devolvió la fila del movimiento creado")
+            raise HTTPException(status_code=500, detail="Error registrando movimiento")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -99,7 +111,7 @@ def listar_recetas(user=Depends(require_roles("CAJERO", "ADMIN"))):
     # Depending on client needs, might need joined queries to show names, 
     # but for offline first, the client joins `insumos` and `productos` locally in Dexie.
     sb = get_supabase()
-    res = sb.table("recetas").select("*").eq("tenant_id", settings.TENANT_ID).execute()
+    res = sb.table("recetas").select("*").execute()
     return res.data or []
 
 @router.post("/recetas", response_model=list[RecetaOut])
@@ -107,7 +119,7 @@ def sincronizar_recetas_producto(producto_id: int, recetas: list[RecetaCreate], 
     sb = get_supabase()
     
     # 1. Delete all existing recipes for this product
-    sb.table("recetas").delete().eq("tenant_id", settings.TENANT_ID).eq("producto_id", producto_id).execute()
+    sb.table("recetas").delete().eq("producto_id", producto_id).execute()
     
     # 2. Insert new
     if not recetas:
@@ -116,7 +128,7 @@ def sincronizar_recetas_producto(producto_id: int, recetas: list[RecetaCreate], 
     payloads = []
     for r in recetas:
         payloads.append({
-            "tenant_id": settings.TENANT_ID,
+
             "producto_id": r.producto_id,
             "insumo_id": r.insumo_id,
             "cantidad": r.cantidad

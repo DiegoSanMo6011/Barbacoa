@@ -274,17 +274,35 @@ def _normalizar_catalogo(payload: Any) -> CatalogoOut:
 
 @router.get("", response_model=CatalogoOut)
 def get_catalogo(_user=Depends(require_roles("CAJERO", "ADMIN"))):
-    """Retorna el catálogo completo con categorías y modificadores."""
+    """Retorna el catálogo completo con productos simples."""
     sb = get_supabase()
-    try:
-        result = sb.rpc("get_catalogo_lite", {"p_tenant_id": settings.TENANT_ID}).execute()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error consultando catálogo: {e}")
-
-    if not result.data:
-        return CatalogoOut(categorias=[])
-
-    return _normalizar_catalogo(result.data)
+    
+    # 1. Fetch direct from legacy productos table
+    res = sb.table("productos").select("*").eq("activo", True).order("orden_catalogo").execute()
+    if not res.data:
+         return CatalogoOut(categorias=[])
+         
+    # 2. Group by text 'categoria' field
+    cat_map = {}
+    for p in res.data:
+        c_name = p.get("categoria") or "GENERAL"
+        if c_name not in cat_map:
+            cat_map[c_name] = {"id": len(cat_map) + 1, "nombre": c_name, "orden": len(cat_map) * 10, "productos": []}
+            
+        prod_format = {
+            "id": p["id"],
+            "nombre": p["nombre"],
+            "precio_base": p["precio"],
+            "precio_abierto": p.get("precio_abierto", False),
+            "personalizacion_tipo": "NINGUNA",
+            "descripcion": p.get("descripcion", ""),
+            "orden_catalogo": p.get("orden_catalogo", 1000),
+            "modificadores": []
+        }
+        cat_map[c_name]["productos"].append(prod_format)
+        
+    categorias_formateadas = list(cat_map.values())
+    return CatalogoOut(categorias=categorias_formateadas)
 
 
 @router.get("/plantillas/{tipo}")
@@ -540,25 +558,15 @@ def crear_producto(body: ProductoCreate, request: Request, user=Depends(require_
     """Crea un nuevo producto en el catálogo."""
     sb = get_supabase()
     data = body.model_dump()
-    nombre, precio_abierto, tipo = _aplicar_reglas_precio_abierto(
-        sb,
-        nombre=data.get("nombre"),
-        precio_abierto=bool(data.get("precio_abierto", False)),
-        personalizacion_tipo=str(data.get("personalizacion_tipo")),
-    )
-    data["nombre"] = nombre
-    data["precio_abierto"] = precio_abierto
-    data["personalizacion_tipo"] = tipo
     data["precio"] = data["precio_base"]  # compatibilidad con esquema POS Full
-    data["tenant_id"] = settings.TENANT_ID
-
+    # Remove tenant_id
+    
     result = sb.table("productos").insert(data).execute()
     if not result.data:
         log_audit_event("catalogo.producto_error", request=request, user=user, metadata={"action": "crear"})
         raise HTTPException(status_code=400, detail="Error al crear producto")
 
     creado = result.data[0]
-    _aplicar_template_personalizacion(sb, int(creado["id"]), data["personalizacion_tipo"])
     log_audit_event(
         "catalogo.producto_creado",
         request=request,
@@ -572,51 +580,21 @@ def crear_producto(body: ProductoCreate, request: Request, user=Depends(require_
 def actualizar_producto(producto_id: int, body: ProductoUpdate, request: Request, user=Depends(require_roles("ADMIN"))):
     """Actualiza un producto existente."""
     sb = get_supabase()
-    data = {k: v for k, v in body.model_dump().items() if v is not None}
+    data = {"nombre": body.nombre, "categoria": body.categoria, "activo": body.activo}
+    data = {k: v for k, v in data.items() if v is not None}
 
-    actual = (
-        sb.table("productos")
-        .select("id, nombre, personalizacion_tipo, precio_abierto")
-        .eq("id", producto_id)
-        .eq("tenant_id", settings.TENANT_ID)
-        .limit(1)
-        .execute()
-    )
-    if not actual.data:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
-
-    actual_row = actual.data[0]
-    tipo_actual = _normalizar_tipo(actual_row.get("personalizacion_tipo"))
-    nombre_nuevo = str(data.get("nombre", actual_row.get("nombre")))
-    precio_abierto_nuevo = bool(data.get("precio_abierto", actual_row.get("precio_abierto", False)))
-    tipo_entrada = str(data.get("personalizacion_tipo", tipo_actual))
-    nombre_nuevo, precio_abierto_nuevo, tipo_nuevo = _aplicar_reglas_precio_abierto(
-        sb,
-        nombre=nombre_nuevo,
-        precio_abierto=precio_abierto_nuevo,
-        personalizacion_tipo=tipo_entrada,
-        exclude_producto_id=producto_id,
-    )
-    data["nombre"] = nombre_nuevo
-    data["precio_abierto"] = precio_abierto_nuevo
-    data["personalizacion_tipo"] = tipo_nuevo
-
-    if "precio_base" in data:
-        data["precio"] = data["precio_base"]  # mantener columnas sincronizadas
+    if "precio_base" in body.model_dump() and body.precio_base is not None:
+        data["precio"] = body.precio_base  # mantener columnas sincronizadas
 
     result = (
         sb.table("productos")
         .update(data)
         .eq("id", producto_id)
-        .eq("tenant_id", settings.TENANT_ID)
         .execute()
     )
     if not result.data:
         log_audit_event("catalogo.producto_error", request=request, user=user, metadata={"action": "actualizar", "producto_id": producto_id})
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-
-    if tipo_nuevo != tipo_actual:
-        _aplicar_template_personalizacion(sb, producto_id, tipo_nuevo)
 
     log_audit_event(
         "catalogo.producto_actualizado",
@@ -631,7 +609,7 @@ def actualizar_producto(producto_id: int, body: ProductoUpdate, request: Request
 def eliminar_producto(producto_id: int, request: Request, user=Depends(require_roles("ADMIN"))):
     """Desactiva (soft delete) un producto."""
     sb = get_supabase()
-    sb.table("productos").update({"activo": False}).eq("id", producto_id).eq("tenant_id", settings.TENANT_ID).execute()
+    sb.table("productos").update({"activo": False}).eq("id", producto_id).execute()
     log_audit_event(
         "catalogo.producto_eliminado",
         request=request,

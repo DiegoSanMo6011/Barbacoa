@@ -3,7 +3,6 @@
 -- ============================================================
 
 ALTER TABLE public.cierres_caja
-  ADD COLUMN IF NOT EXISTS tenant_id uuid,
   ADD COLUMN IF NOT EXISTS fecha date DEFAULT CURRENT_DATE,
   ADD COLUMN IF NOT EXISTS status text DEFAULT 'ABIERTA',
   ADD COLUMN IF NOT EXISTS caja_chica_inicial numeric DEFAULT 0,
@@ -41,8 +40,8 @@ EXCEPTION WHEN duplicate_object THEN
 END
 $$;
 
-CREATE UNIQUE INDEX IF NOT EXISTS cierres_caja_tenant_fecha_uq
-  ON public.cierres_caja (tenant_id, fecha);
+CREATE UNIQUE INDEX IF NOT EXISTS cierres_caja_fecha_uq
+  ON public.cierres_caja (fecha);
 
 -- Si existen funciones legacy con la misma firma pero distinto retorno,
 -- hay que eliminarlas antes de recrearlas.
@@ -53,12 +52,9 @@ DROP FUNCTION IF EXISTS public.cerrar_jornada(uuid, numeric, numeric, numeric, t
 DROP FUNCTION IF EXISTS public.cerrar_jornada(uuid, numeric, uuid);
 DROP FUNCTION IF EXISTS public.reabrir_jornada(uuid, uuid, text);
 
-CREATE OR REPLACE FUNCTION public.get_jornada_activa(
-  p_tenant_id uuid
-)
+CREATE OR REPLACE FUNCTION public.get_jornada_activa()
 RETURNS TABLE (
   id uuid,
-  tenant_id uuid,
   fecha date,
   status text,
   caja_chica_inicial numeric,
@@ -81,7 +77,6 @@ SET search_path = public
 AS $$
   SELECT
     c.id,
-    c.tenant_id,
     c.fecha,
     c.status,
     c.caja_chica_inicial,
@@ -98,14 +93,12 @@ AS $$
     c.created_at,
     c.fecha_cierre
   FROM public.cierres_caja c
-  WHERE c.tenant_id = p_tenant_id
-    AND c.fecha = CURRENT_DATE
+  WHERE c.fecha = CURRENT_DATE
   ORDER BY c.created_at DESC
   LIMIT 1;
 $$;
 
 CREATE OR REPLACE FUNCTION public.abrir_jornada(
-  p_tenant_id uuid,
   p_caja_chica numeric,
   p_usuario text DEFAULT NULL
 )
@@ -120,8 +113,7 @@ BEGIN
   SELECT id
     INTO v_id
   FROM public.cierres_caja
-  WHERE tenant_id = p_tenant_id
-    AND fecha = CURRENT_DATE
+  WHERE fecha = CURRENT_DATE
   LIMIT 1;
 
   IF v_id IS NOT NULL THEN
@@ -134,7 +126,6 @@ BEGIN
   END IF;
 
   INSERT INTO public.cierres_caja (
-    tenant_id,
     fecha,
     status,
     caja_chica_inicial,
@@ -147,7 +138,6 @@ BEGIN
     abierta_por
   )
   VALUES (
-    p_tenant_id,
     CURRENT_DATE,
     'ABIERTA',
     COALESCE(p_caja_chica, 0),
@@ -212,7 +202,6 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.reabrir_jornada(
   p_cierre_id uuid,
-  p_tenant_id uuid,
   p_pin_duenio text DEFAULT NULL
 )
 RETURNS uuid
@@ -228,8 +217,7 @@ BEGIN
     diferencia = NULL,
     folio_corte = NULL,
     fecha_cierre = NULL
-  WHERE id = p_cierre_id
-    AND tenant_id = p_tenant_id;
+  WHERE id = p_cierre_id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Jornada no encontrada.';

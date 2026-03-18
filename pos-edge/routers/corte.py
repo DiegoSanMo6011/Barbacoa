@@ -16,7 +16,7 @@ router = APIRouter()
 def get_jornada_activa(_user=Depends(require_roles("CAJERO", "ADMIN"))):
     """Retorna la jornada activa de hoy, o None si no hay."""
     sb = get_supabase()
-    result = sb.rpc("get_jornada_activa", {"p_tenant_id": settings.TENANT_ID}).execute()
+    result = sb.rpc("get_jornada_activa").execute()
     if not result.data:
         return None
     row = result.data[0]
@@ -46,7 +46,6 @@ def abrir_jornada(body: AbrirCorteRequest, request: Request, user=Depends(requir
     result = sb.rpc(
         "abrir_jornada",
         {
-            "p_tenant_id": settings.TENANT_ID,
             "p_caja_chica": body.caja_chica_inicial,
             "p_usuario": usuario,
         },
@@ -69,7 +68,7 @@ def cerrar_jornada(body: CerrarCorteRequest, request: Request, user=Depends(requ
     """Cierra la jornada activa y genera el folio de corte."""
     sb = get_supabase()
     # Obtener jornada activa
-    jornada = sb.rpc("get_jornada_activa", {"p_tenant_id": settings.TENANT_ID}).execute()
+    jornada = sb.rpc("get_jornada_activa").execute()
     if not jornada.data:
         log_audit_event("corte.cerrar_error", request=request, user=user, metadata={"detail": "No hay jornada activa"})
         raise HTTPException(status_code=404, detail="No hay jornada activa")
@@ -105,7 +104,7 @@ def reabrir_jornada(request: Request, user=Depends(require_roles("ADMIN"))):
     """Reabre la última jornada cerrada del día."""
     sb = get_supabase()
 
-    activa = sb.rpc("get_jornada_activa", {"p_tenant_id": settings.TENANT_ID}).execute()
+    activa = sb.rpc("get_jornada_activa").execute()
     if activa.data and str(activa.data[0].get("status", "")).upper() == "ABIERTA":
         log_audit_event("corte.reabrir_error", request=request, user=user, metadata={"detail": "Ya existe jornada abierta"})
         raise HTTPException(status_code=409, detail="Ya existe una jornada abierta")
@@ -114,7 +113,6 @@ def reabrir_jornada(request: Request, user=Depends(require_roles("ADMIN"))):
     cerrada = (
         sb.table("cierres_caja")
         .select("id")
-        .eq("tenant_id", settings.TENANT_ID)
         .eq("fecha", hoy)
         .eq("status", "CERRADA")
         .order("created_at", desc=True)
@@ -139,7 +137,6 @@ def reabrir_jornada(request: Request, user=Depends(require_roles("ADMIN"))):
             sb.table("cierres_caja")
             .update(payload)
             .eq("id", jornada_id)
-            .eq("tenant_id", settings.TENANT_ID)
             .execute()
         )
     except Exception:
@@ -148,7 +145,6 @@ def reabrir_jornada(request: Request, user=Depends(require_roles("ADMIN"))):
             sb.table("cierres_caja")
             .update({"status": "ABIERTA"})
             .eq("id", jornada_id)
-            .eq("tenant_id", settings.TENANT_ID)
             .execute()
         )
 

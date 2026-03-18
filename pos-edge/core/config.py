@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     JWT_TTL_HOURS: int = 12
     AUTH_MAX_ATTEMPTS: int = 5
     AUTH_LOCKOUT_MINUTES: int = 15
-    AUTH_MAX_ACTIVE_SESSIONS: int = 2
+    AUTH_MAX_ACTIVE_SESSIONS: int = 100
 
 settings = Settings()
 

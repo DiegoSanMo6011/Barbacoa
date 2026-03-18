@@ -40,7 +40,7 @@ echo "==> Iniciando Edge en :${EDGE_PORT}"
 (
   cd "${EDGE_DIR}"
   source .venv/bin/activate
-  uvicorn main:app --reload --port "${EDGE_PORT}"
+  uvicorn main:app --reload --host 0.0.0.0 --port "${EDGE_PORT}"
 ) &
 EDGE_PID=$!
 

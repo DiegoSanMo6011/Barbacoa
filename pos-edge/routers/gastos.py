@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("", response_model=list[GastoOut])
 def listar_gastos(user=Depends(require_roles("CAJERO", "ADMIN"))):
     sb = get_supabase()
-    res = sb.table("gastos").select("*").eq("tenant_id", settings.TENANT_ID).order("fecha", desc=True).execute()
+    res = sb.table("gastos").select("*").order("created_at", desc=True).execute()
     return res.data or []
 
 @router.post("", response_model=GastoOut, status_code=201)
@@ -19,7 +19,6 @@ def registrar_gasto(gasto: GastoCreate, request: Request, user=Depends(require_r
     
     # 1. Registrar gasto
     payload = gasto.model_dump()
-    payload["tenant_id"] = settings.TENANT_ID
     
     res = sb.table("gastos").insert(payload).execute()
     if not res.data:
@@ -28,11 +27,12 @@ def registrar_gasto(gasto: GastoCreate, request: Request, user=Depends(require_r
     gasto_creado = res.data[0]
     
     # 2. Si es en efectivo y hay caja abierta, restar de caja chica (Misma logica que POS-Inventory)
-    if payload["metodo_pago"] == "EFECTIVO":
-        corte_activo = sb.table("cortes_caja").select("id").eq("tenant_id", settings.TENANT_ID).eq("status", "ABIERTO").execute()
+    if payload.get("metodo_pago") == "EFECTIVO":
+        corte_activo = sb.table("cierres_caja").select("id, total_gastos").eq("estado", "ABIERTO").order("created_at", desc=True).limit(1).execute()
         if corte_activo.data:
-            monto = float(payload["monto"])
-            sb.rpc("ajustar_caja_chica", {"p_tenant_id": settings.TENANT_ID, "p_monto": -monto}).execute()
+            cierre = corte_activo.data[0]
+            nuevo_gasto = float(cierre.get("total_gastos", 0)) + float(gasto.monto)
+            sb.table("cierres_caja").update({"total_gastos": nuevo_gasto}).eq("id", cierre["id"]).execute()
         
     log_audit_event("finanzas.gasto_registrado", request=request, user=user, metadata={"monto": gasto.monto, "concepto": gasto.concepto})
     return gasto_creado

@@ -102,9 +102,7 @@ async def add_request_context(request: Request, call_next):
     return response
 
 allow_origins = [origin.strip() for origin in settings.ALLOW_ORIGINS.split(",") if origin.strip()]
-if not allow_origins:
-    allow_origins = ["http://localhost:5173"]
-
+allow_origins.extend(["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174", "http://10.0.2.15:5173"])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,

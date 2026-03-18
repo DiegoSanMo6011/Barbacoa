@@ -46,8 +46,8 @@ export default function Corte() {
             const data = await res.json()
             setJornada(data)
             setError(null)
-        } catch {
-            setError('Sin conexión al Edge Server')
+        } catch (e: any) {
+            setError(e.message ?? 'Error desconocido de conexión')
         } finally {
             if (!silencioso) setCargando(false)
         }
