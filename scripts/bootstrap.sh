@@ -103,6 +103,7 @@ Instala cliente PostgreSQL o ejecuta los SQL manualmente en Supabase SQL Editor:
   sql/02_rls_policies.sql
   sql/03_rpcs.sql
   sql/04_go_live_hardening.sql
+  sql/05_jornada_rpcs.sql
   sql/seed_demo_cafe.sql (opcional)
 EOF
     exit 1
@@ -114,6 +115,7 @@ EOF
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/sql/02_rls_policies.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/sql/03_rpcs.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/sql/04_go_live_hardening.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/sql/05_jornada_rpcs.sql"
 
   if [[ "$WITH_SEED" -eq 1 ]]; then
     : "${TENANT_ID:?Error: define TENANT_ID para ejecutar seed}"
