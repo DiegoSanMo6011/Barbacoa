@@ -451,18 +451,16 @@ export default function Catalogo() {
                 value={formNuevo.descripcion}
                 onChange={e => setFormNuevo(v => ({ ...v, descripcion: e.target.value }))}
             />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'none' }}>
                 <select
                     className="input"
                     value={formNuevo.personalizacion_tipo}
                     onChange={e => setFormNuevo(v => ({
                         ...v,
-                        personalizacion_tipo: e.target.value as PersonalizacionTipo,
+                        personalizacion_tipo: "NINGUNA",
                     }))}
                 >
                     <option value="NINGUNA">Sin personalización</option>
-                    <option value="TACO">Plantilla taco</option>
-                    <option value="TORTA">Plantilla torta</option>
                 </select>
             </div>
             <button className="btn btn-primary btn-full" disabled={guardando} onClick={handleCrearProducto}>
@@ -760,22 +758,7 @@ export default function Catalogo() {
                     alignItems: 'flex-end',
                     pointerEvents: 'none',
                 }}>
-                    <button
-                        className="shadow-sm"
-                        style={{
-                            width: 44, height: 44, borderRadius: 22,
-                            fontSize: '1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            pointerEvents: 'auto', border: '1px solid var(--color-border)',
-                            background: 'var(--color-surface)', color: 'var(--color-text)'
-                        }}
-                        onClick={() => {
-                            setMostrarPlantillasMobile(true)
-                            setMostrarNuevo(false)
-                        }}
-                        title="Plantillas"
-                    >
-                        ⚙️
-                    </button>
+                    {/* Botón de Plantillas removido para versión Single-Store */}
                     <button
                         className="btn btn-primary shadow-lg"
                         style={{
@@ -811,7 +794,7 @@ export default function Catalogo() {
                                 }}>✕</button>
                             </div>
                             <div style={{ padding: 'var(--space-4)', overflowY: 'auto' }}>
-                                {mostrarNuevo ? formNuevoEl : plantillasEl}
+                                {mostrarNuevo && formNuevoEl}
                             </div>
                         </div>
                     </div>
@@ -855,7 +838,7 @@ export default function Catalogo() {
                     fontWeight: 700,
                     fontSize: '1.05rem',
                 }}>
-                    ⚙️ Configuración & Plantillas
+                    ✨ Detalles del Producto
                 </div>
                 <div style={{
                     flex: 1,
@@ -865,8 +848,12 @@ export default function Catalogo() {
                     flexDirection: 'column',
                     gap: 'var(--space-5)',
                 }}>
-                    {mostrarNuevo && formNuevoEl}
-                    {plantillasEl}
+                    {mostrarNuevo ? formNuevoEl : (
+                        <div style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-text-muted)' }}>
+                            <span style={{ fontSize: '2rem' }}>📝</span>
+                            <p style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>Selecciona "+ Nuevo producto" para usar este panel.</p>
+                        </div>
+                    )}
                 </div>
             </aside>
         </div>
@@ -952,20 +939,7 @@ function ProductoRow({
                     <span style={{ fontWeight: 700, color: 'var(--color-brand)', whiteSpace: 'nowrap' }}>
                         {p.precio_abierto ? 'Abierto' : fmtMXN(p.precio_base)}
                     </span>
-                    {onEditarPersonalizacion && (
-                        <button
-                            className="btn btn-ghost btn-icon"
-                            disabled={actualizando}
-                            onClick={e => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                onEditarPersonalizacion(p)
-                            }}
-                            title="Editar plantilla"
-                        >
-                            {actualizando ? '⏳' : '⚙️'}
-                        </button>
-                    )}
+                    {/* Editar plantilla button omitido para el cliente Single-Suite */}
                     {onEliminar && (
                         <button
                             className="btn btn-ghost btn-icon"
