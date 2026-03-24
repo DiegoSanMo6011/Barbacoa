@@ -58,6 +58,21 @@ export default function UnlockScreen() {
         }
     }
 
+    const handleRecuperarPIN = async () => {
+        if (rol === 'CAJERO') {
+            window.alert('Para recuperar o restablecer tu PIN de Cajero, por favor contacta al Administrador o Dueño del sistema.');
+        } else {
+            try {
+                const res = await apiFetch('/auth/recover_hint', {}, { auth: false })
+                if (!res.ok) throw new Error('No se pudo establecer conexión para recuperar la pista.')
+                const data = await res.json()
+                window.alert(`Pista de Contraseña Administrador:\n\n${data.hint}`)
+            } catch (e: any) {
+                window.alert('Error al recuperar pista: ' + e.message)
+            }
+        }
+    }
+
     return (
         <div style={{ minHeight: '100dvh', background: 'var(--color-bg)', display: 'grid', placeItems: 'center', padding: 16 }}>
             <div style={{ width: 'min(100%, 402px)', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -215,7 +230,16 @@ export default function UnlockScreen() {
                         {loading ? 'Validando...' : 'Entrar y abrir caja'}
                     </button>
 
-                    <p style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
+                    <button
+                        className="btn btn-ghost btn-full"
+                        style={{ height: 40, marginTop: 4, color: 'var(--color-text-muted)', fontSize: 13, fontWeight: 600 }}
+                        onClick={handleRecuperarPIN}
+                        disabled={loading}
+                    >
+                        ¿Olvidaste tu PIN?
+                    </button>
+
+                    <p style={{ fontSize: 11, color: 'var(--color-text-faint)', textAlign: 'center', marginTop: 8 }}>
                         Si tu sesion expira, vuelve a ingresar PIN.
                     </p>
                 </div>

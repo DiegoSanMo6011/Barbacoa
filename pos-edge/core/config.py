@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "changeme-in-production"
     PIN_CAJERO: str = "1234"
     PIN_ADMIN: str = "0000"
+    PIN_HINT: str = "Escribe una pista para recordar tu PIN aquí (ej. Nacimiento)"
     ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:4173"
     JWT_TTL_HOURS: int = 12
     AUTH_MAX_ATTEMPTS: int = 5

@@ -186,6 +186,15 @@ def unlock(body: UnlockRequest, request: Request):
     return UnlockResponse(token=token, rol=body.rol, usuario=usuario, session_id=session_id, expires_at=expires)
 
 
+@router.get("/recover_hint", response_model=dict)
+def recover_hint():
+    """Devuelve la pista del PIN configurada en las variables de entorno para ayudar a los admins."""
+    hint = getattr(settings, "PIN_HINT", None)
+    if not hint:
+        return {"hint": "No hay pista configurada en el sistema. Consulta el archivo .env"}
+    return {"hint": hint}
+
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, user: dict[str, str | None] = Depends(get_current_user)):
     tenant = str(user["tenant"])
