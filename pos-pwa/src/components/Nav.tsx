@@ -6,7 +6,8 @@ import {
     HandCoins,
     History,
     Package,
-    ShoppingCart
+    ShoppingCart,
+    Users
 } from 'lucide-react'
 import { useSessionStore } from '../store/sessionStore'
 import './Nav.css'
@@ -23,6 +24,7 @@ function iconFor(path: string) {
     if (path === '/inventario') return <Package size={18} />
     if (path === '/gastos') return <Wallet size={18} />
     if (path === '/propinas') return <HandCoins size={18} />
+    if (path === '/personal') return <Users size={18} />
     if (path === '/historial') return <History size={18} />
     return <ClipboardList size={18} />
 }
@@ -37,7 +39,8 @@ export default function Nav({ currentPath, onLogout }: Props) {
             { path: '/catalogo', label: 'Catálogo' },
             { path: '/inventario', label: 'Insumos' },
             { path: '/gastos', label: 'Gastos' },
-            { path: '/propinas', label: 'Propinas' }
+            { path: '/propinas', label: 'Propinas' },
+            { path: '/personal', label: 'Personal' }
         ] : []),
     ]
 

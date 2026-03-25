@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from routers import productos, comandas, corte, auth, status as status_router, inventario, gastos, propinas
+from routers import productos, comandas, corte, auth, status as status_router, inventario, gastos, propinas, meseros
 from core.config import settings, validate_runtime_security
 from core.supabase_client import get_supabase
 
@@ -118,4 +118,5 @@ app.include_router(corte.router,     prefix="/corte",      tags=["Corte de Caja"
 app.include_router(inventario.router, prefix="/inventario", tags=["Inventario"])
 app.include_router(gastos.router,    prefix="/gastos",     tags=["Gastos"])
 app.include_router(propinas.router,  prefix="/propinas",   tags=["Propinas"])
+app.include_router(meseros.router,   prefix="/meseros",    tags=["Personal"])
 app.include_router(status_router.router, prefix="/status", tags=["Status"])

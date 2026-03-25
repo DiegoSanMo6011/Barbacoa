@@ -13,6 +13,7 @@ import { getAutoLockMs, sessionIsValid } from './lib/session'
 import Inventario from './views/admin/Inventario'
 import Gastos from './views/admin/Gastos'
 import Propinas from './views/admin/Propinas'
+import Personal from './views/admin/Personal'
 import './styles/global.css'
 import './styles/components.css'
 
@@ -97,6 +98,7 @@ export default function App() {
             <Route path="/inventario" element={rol === 'ADMIN' ? <Inventario /> : <Navigate to="/venta" replace />} />
             <Route path="/gastos" element={rol === 'ADMIN' ? <Gastos /> : <Navigate to="/venta" replace />} />
             <Route path="/propinas" element={rol === 'ADMIN' ? <Propinas /> : <Navigate to="/venta" replace />} />
+            <Route path="/personal" element={rol === 'ADMIN' ? <Personal /> : <Navigate to="/venta" replace />} />
         </Routes>
     )
 
