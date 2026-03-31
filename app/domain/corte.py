@@ -24,15 +24,16 @@ def calc_efectivo_teorico(
     caja_chica_inicial: float = 0.0,
 ) -> float:
     # Efectivo esperado en caja:
-    #   caja_chica + ventas_efectivo + propinas_efectivo - gastos
-    # - Las propinas en EFECTIVO suman: el cliente las deja en caja junto
-    #   con su pago, así que deben estar físicamente en el cajón.
-    # - Las propinas de TARJETA no afectan este cálculo (se cobran por terminal).
+    #   caja_chica + ventas_efectivo - gastos - propinas_tarjeta
+    # - Las propinas de TARJETA se cobran por terminal (no entran al cajón),
+    #   pero se pagan al mesero en efectivo al final del día → restan.
+    # - Las propinas en EFECTIVO no afectan: el mesero las toma directamente
+    #   o entran y salen de caja (efecto neto = cero).
     # - Los gastos restan porque salen de la caja durante el día.
     return _round2(
         float(caja_chica_inicial)
         + float(ventas_efectivo)
-        + float(propinas_efectivo_total)
+        - float(propinas_tarjeta_total)
         - float(gastos_total)
     )
 

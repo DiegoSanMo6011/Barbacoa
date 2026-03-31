@@ -210,8 +210,8 @@ def check_domain_calculos() -> str:
         propinas_efectivo_total=5,
         caja_chica_inicial=50,
     )
-    assert efectivo == 115.0
-    assert corte.calc_diferencia(130, efectivo) == 15.0
+    assert efectivo == 120.0  # 50 + 100 - 10 - 20 (propinas_efectivo no afectan caja)
+    assert corte.calc_diferencia(130, efectivo) == 10.0
     return "Funciones de calculo con resultados esperados"
 
 
