@@ -163,7 +163,7 @@ class CorteView(ctk.CTkToplevel):
         _row(resumen_caja, "Neto:", self.neto_var, 4)
         ctk.CTkLabel(
             resumen_caja,
-            text="Efectivo esperado = Caja chica + Ventas efectivo + Propinas efectivo − Gastos.",
+            text="Efectivo esperado = Caja chica + Ventas efectivo − Propinas TARJETA − Gastos.",
             text_color="#4b5563",
         ).grid(row=5, column=0, columnspan=2, padx=8, pady=(2, 8), sticky="w")
 
