@@ -4,7 +4,7 @@ import sys
 import logging
 import threading
 import time as pytime
-from datetime import datetime
+from datetime import date, datetime
 from typing import Callable
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -20,6 +20,7 @@ from ui.auth_unlock_dialog import ask_unlock
 from ui.gastos_dialog import GastosDialog
 from ui.propinas_dialog import PropinasDialog
 from ui.corte_view import CorteView
+from services.corte_service import get_corte_por_fecha, ESTADO_CERRADO
 from ui.reportes_view import ReportesView
 from ui.historial_tickets_view import HistorialTicketsView
 from ui.personal_dialog import PersonalDialog
@@ -50,6 +51,7 @@ class POSApp(tk.Tk):
 
         self.title("AutoNoma POS")
         self._configure_window_mode()
+        self.protocol("WM_DELETE_WINDOW", self._exit_app)
         self.bind("<Escape>", lambda _e: self._exit_fullscreen())
 
         # Estilo ttk (se ve pro)
@@ -662,8 +664,27 @@ class POSApp(tk.Tk):
         self.after(30000, self._sync_loop)
 
     def _exit_app(self):
-        if messagebox.askyesno("Salir", "¿Cerrar el POS?"):
-            self.destroy()
+        cierre_pendiente = False
+        try:
+            corte = get_corte_por_fecha(date.today(), db=self.db)
+            if not corte or corte.get("estado") != ESTADO_CERRADO:
+                cierre_pendiente = True
+        except Exception:
+            pass
+
+        if cierre_pendiente:
+            if not messagebox.askyesno(
+                "Cierre pendiente",
+                "El cierre de caja del día NO se ha realizado.\n\n"
+                "¿Estás seguro de que deseas cerrar el programa?",
+                icon="warning",
+            ):
+                return
+        else:
+            if not messagebox.askyesno("Salir", "¿Cerrar el POS?"):
+                return
+
+        self.destroy()
 
     def _tick_clock(self):
         self.clock_var.set(datetime.now().strftime("%H:%M:%S"))
