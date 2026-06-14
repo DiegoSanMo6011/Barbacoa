@@ -29,29 +29,41 @@ class SupabaseTable(ABC):
 
     def __init__(self, client: Any):
         self._client = client
+        self._autonoma: Any = None  # AutonomaClient, asignado por SupabaseService
 
     def _table(self):
         return self._client.table(self.table_name)
 
     def _insert_one(self, payload: dict) -> dict:
         res = self._table().insert(payload).execute()
-        return res.data[0]
+        result = res.data[0]
+        if self._autonoma:
+            self._autonoma.replicate_insert(self.table_name, payload, result)
+        return result
 
     def _insert_many(self, payloads: list[dict]) -> list[dict]:
         if not payloads:
             return []
         res = self._table().insert(payloads).execute()
-        return res.data or []
+        results = res.data or []
+        if self._autonoma and results:
+            self._autonoma.replicate_insert_many(self.table_name, payloads, results)
+        return results
 
     def _update_one(self, payload: dict, key: str, value: Any) -> dict:
         res = self._table().update(payload).eq(key, value).execute()
-        return res.data[0]
+        result = res.data[0]
+        if self._autonoma:
+            self._autonoma.replicate_update(self.table_name, payload, key, value)
+        return result
 
     def _delete_one(self, key: str, value: Any) -> dict | None:
         res = self._table().delete().eq(key, value).execute()
         rows = res.data or []
         if not rows:
             return None
+        if self._autonoma:
+            self._autonoma.replicate_delete(self.table_name, key, value)
         return rows[0]
 
 
@@ -268,6 +280,8 @@ class ComandaItemsRepository(SupabaseTable):
 
     def replace_for_comanda(self, comanda_id: str, items: list[ComandaItem]) -> None:
         self._table().delete().eq("comanda_id", comanda_id).execute()
+        if self._autonoma:
+            self._autonoma.replicate_delete(self.table_name, "comanda_id", comanda_id)
         self.insert_many(comanda_id, items)
 
 
@@ -321,6 +335,8 @@ class ComandaPagosRepository(SupabaseTable):
         
     def replace_for_comanda(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
         self._table().delete().eq("comanda_id", comanda_id).execute()
+        if self._autonoma:
+            self._autonoma.replicate_delete(self.table_name, "comanda_id", comanda_id)
         return self.insert_many(comanda_id, pagos)
 
 

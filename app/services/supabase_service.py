@@ -46,6 +46,7 @@ from .repositories import (
 from .settings import SUPABASE_KEY, SUPABASE_URL
 from .settings import SUPABASE_TIMEOUT_SECONDS
 from .settings import BARBACOA_TIMEZONE
+from .settings import AUTONOMA_ENABLED
 
 
 class SupabaseService(OfflineSync):
@@ -77,7 +78,35 @@ class SupabaseService(OfflineSync):
         self.cierres_repo = CierresRepository(self.client)
         self.usuarios_repo = UsuariosRepository(self.client)
 
+        self._autonoma = self._init_autonoma()
+
         self._start_legacy_role_migration_async()
+
+    def _init_autonoma(self):
+        """Inicializa el cliente de Autonoma si esta configurado."""
+        if not AUTONOMA_ENABLED:
+            return None
+        try:
+            from .autonoma_sync import AutonomaClient
+            client = AutonomaClient()
+            # Asignar a todos los repositorios.
+            for repo in (
+                self.productos_repo,
+                self.meseros_repo,
+                self.comandas_repo,
+                self.items_repo,
+                self.pagos_repo,
+                self.correcciones_repo,
+                self.ticket_historial_repo,
+                self.gastos_repo,
+                self.propinas_repo,
+                self.cierres_repo,
+            ):
+                repo._autonoma = client
+            return client
+        except Exception:
+            self._logger.warning("No se pudo inicializar Autonoma dual-write", exc_info=True)
+            return None
 
     @staticmethod
     def _should_enqueue_offline(exc: Exception) -> bool:
@@ -259,11 +288,57 @@ class SupabaseService(OfflineSync):
         self.items_repo.insert_many(comanda_id, parsed_items)
 
     def _insert_comanda(self, draft: ComandaDraft) -> dict:
-        comanda = self.comandas_repo.create(draft)
-        if draft.items:
-            self.items_repo.insert_many(comanda["id"], draft.items)
-        self.guardar_pagos_comanda(comanda["id"], draft.pagos)
-        self._replace_comanda_tips(comanda["id"], draft.mesero, draft.pagos)
+        # Deshabilitar dual-write individual en repos para esta operacion;
+        # se usa replicate_comanda() al final como batch atomico.
+        saved_autonoma = self._autonoma
+        if saved_autonoma:
+            self.comandas_repo._autonoma = None
+            self.items_repo._autonoma = None
+            self.pagos_repo._autonoma = None
+            self.propinas_repo._autonoma = None
+
+        try:
+            comanda = self.comandas_repo.create(draft)
+            if draft.items:
+                self.items_repo.insert_many(comanda["id"], draft.items)
+            self.guardar_pagos_comanda(comanda["id"], draft.pagos)
+            self._replace_comanda_tips(comanda["id"], draft.mesero, draft.pagos)
+        finally:
+            # Restaurar dual-write en repos.
+            if saved_autonoma:
+                self.comandas_repo._autonoma = saved_autonoma
+                self.items_repo._autonoma = saved_autonoma
+                self.pagos_repo._autonoma = saved_autonoma
+                self.propinas_repo._autonoma = saved_autonoma
+
+        # Replicar toda la comanda como batch a Autonoma.
+        if saved_autonoma:
+            items_payloads = [it.to_record(comanda_id=comanda["id"]) for it in draft.items] if draft.items else []
+            pagos_payloads = []
+            propinas_payloads = []
+            for idx, pago in enumerate(draft.pagos or []):
+                pagos_payloads.append({
+                    "comanda_id": comanda["id"],
+                    "orden": int(pago.get("orden") or idx + 1),
+                    "metodo_pago": str(pago.get("metodo_pago") or "").strip().upper(),
+                    "monto": float(pago.get("monto") or 0),
+                    "recibido": pago.get("recibido"),
+                    "cambio": pago.get("cambio"),
+                    "propina": float(pago.get("propina") or 0),
+                })
+                tip = float(pago.get("propina") or 0)
+                if tip > 0:
+                    fuente = str(pago.get("metodo_pago") or "NO_ESPECIFICADO").strip().upper()
+                    propina = Propina.from_inputs(
+                        monto=tip,
+                        mesero_id=None,
+                        mesero_nombre_snapshot=draft.mesero or "Sin nombre",
+                        fuente=fuente,
+                        comanda_id=comanda["id"],
+                    )
+                    propinas_payloads.append(propina.to_record())
+            saved_autonoma.replicate_comanda(comanda, items_payloads, pagos_payloads, propinas_payloads)
+
         return comanda
 
     def guardar_pagos_comanda(self, comanda_id: str, pagos: list[dict]) -> list[dict]:
@@ -293,6 +368,9 @@ class SupabaseService(OfflineSync):
         except Exception:
             # No bloquear guardado por limpieza de propinas legacy.
             pass
+        # Replicar delete de propinas a Autonoma (bypass de repo).
+        if self._autonoma:
+            self._autonoma.replicate_delete("propinas", "comanda_id", comanda_id)
         for pago in pagos:
             tip = float(pago.get("propina") or 0)
             if tip <= 0:
