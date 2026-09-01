@@ -117,7 +117,7 @@ def build_corte_ticket_text(payload: dict) -> str:
     lines.append(f"Vta tarjeta:  ${ventas_tarjeta:.2f}")
     lines.append(f"Vta transfer: ${ventas_transfer:.2f}")
     lines.append(f"Total ventas: ${total_ventas:.2f}")
-    lines.append(f"Total gastos: ${total_gastos:.2f}")
+    lines.append(f"Gastos efvo:  ${total_gastos:.2f}")
     lines.append(_line())
     lines.append(f"Prop tjt:     ${propinas_tarjeta:.2f}")
     lines.append(f"Prop efvo:    ${propinas_efectivo:.2f}")

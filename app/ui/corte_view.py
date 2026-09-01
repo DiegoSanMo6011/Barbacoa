@@ -158,12 +158,12 @@ class CorteView(ctk.CTkToplevel):
             row=0, column=0, columnspan=2, padx=8, pady=(8, 6), sticky="w"
         )
         _row(resumen_caja, "Caja chica inicial:", self.caja_chica_display_var, 1)
-        _row(resumen_caja, "Total gastos:", self.total_gastos_var, 2)
+        _row(resumen_caja, "Gastos en efectivo (caja):", self.total_gastos_var, 2)
         _row(resumen_caja, "Efectivo esperado en caja:", self.efectivo_teorico_var, 3, highlight=True)
         _row(resumen_caja, "Neto:", self.neto_var, 4)
         ctk.CTkLabel(
             resumen_caja,
-            text="Efectivo esperado = Caja chica + Ventas efectivo − Propinas TARJETA − Gastos.",
+            text="Efectivo esperado = Caja chica + Ventas efectivo − Propinas TARJETA − Gastos en efectivo.",
             text_color="#4b5563",
         ).grid(row=5, column=0, columnspan=2, padx=8, pady=(2, 8), sticky="w")
 

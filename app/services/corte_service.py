@@ -30,11 +30,18 @@ def get_ventas_por_metodo(fecha: date, db: SupabaseService | None = None) -> dic
 
 
 def get_gastos_total(fecha: date, db: SupabaseService | None = None) -> float:
+    """Total de gastos en EFECTIVO del día (salidas de caja física).
+
+    Solo se cuentan gastos con metodo_pago EFECTIVO: los pagados con
+    TARJETA/TRANSFER no salen del cajón y no deben restar del efectivo
+    teórico del corte.
+    """
     db = _get_db(db)
     desde, hasta = db._day_range(fecha)
     rows = (
         db.client.table("gastos")
         .select("monto")
+        .eq("metodo_pago", "EFECTIVO")
         .gte("created_at", desde)
         .lte("created_at", hasta)
         .execute()
