@@ -760,9 +760,8 @@ class SupabaseService(OfflineSync):
         if not changes:
             raise ValueError("No hay cambios para actualizar.")
 
-        # Updated field to force ordering/auditing
-        changes["created_at"] = datetime.now(timezone.utc).isoformat()
-        
+        # No tocar created_at al editar: reescribirlo movía el gasto al día de la
+        # edición, descuadrando el corte y la analítica del día original.
         try:
             return self.gastos_repo.update_fields(gasto_id, changes)
         except Exception as exc:
